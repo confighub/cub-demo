@@ -1,0 +1,17 @@
+# An S3 bucket for {{.Component}}. The bucket name carries the region suffix
+# the seeder sets per deployment; buckets are global, names are not.
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: Bucket
+metadata:
+  name: "{{.Name}}"
+  labels:
+    app.kubernetes.io/part-of: "{{.Component}}"
+spec:
+  forProvider:
+    region: us-east-1
+    forceDestroy: false
+    tags:
+      component: "{{.Component}}"
+      managed-by: confighub
+  providerConfigRef:
+    name: aws-default

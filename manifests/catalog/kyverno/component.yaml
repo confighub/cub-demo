@@ -1,0 +1,14 @@
+units:
+  - {slug: namespace, file: namespace.yaml}
+  - {slug: controller, file: controller.yaml}
+  - {slug: policies, file: policies.yaml}
+values:
+  version: v1.13.2
+perClass:
+  test:
+    - {function: set-string-path, args: ["kyverno.io/v1/ClusterPolicy", "spec.validationFailureAction", "Audit"], where: "Slug = 'policies'"}
+  uat:
+    - {function: set-string-path, args: ["kyverno.io/v1/ClusterPolicy", "spec.validationFailureAction", "Enforce"], where: "Slug = 'policies'"}
+  prod:
+    - {function: set-replicas, args: ["3"], where: "Slug = 'controller'"}
+    - {function: set-string-path, args: ["kyverno.io/v1/ClusterPolicy", "spec.validationFailureAction", "Enforce"], where: "Slug = 'policies'"}

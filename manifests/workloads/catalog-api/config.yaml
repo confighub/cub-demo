@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalog-api-config
+  namespace: catalog-api
+data:
+  SEARCH_URL: http://search-api.search.svc
+  CACHE_TTL_SECONDS: "300"
+  IMAGE_BASE: https://cdn.{{.Scenario.Domain}}/products

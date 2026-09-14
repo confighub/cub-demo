@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout-api
+  namespace: checkout
+  labels:
+    app.kubernetes.io/name: checkout
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: checkout
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: checkout
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: checkout
+        app.kubernetes.io/component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+        - name: api
+          image: registry.{{.Scenario.Domain}}/checkout/api:{{.Values.version}}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: LOG_LEVEL
+              value: debug
+            - name: AWS_REGION
+              value: us-east-1
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: 4.1.0-conn
+                  key: endpoint
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: checkout-api
+  namespace: checkout
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: checkout
+    app.kubernetes.io/component: api

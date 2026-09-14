@@ -1,0 +1,23 @@
+# An ElastiCache (Redis) replication group for {{.Component}}.
+apiVersion: elasticache.aws.upbound.io/v1beta1
+kind: ReplicationGroup
+metadata:
+  name: "{{.Name}}"
+  labels:
+    app.kubernetes.io/part-of: "{{.Component}}"
+spec:
+  forProvider:
+    region: us-east-1
+    description: "{{.Component}} cache"
+    engine: redis
+    engineVersion: "7.1"
+    nodeType: cache.t3.micro
+    numCacheClusters: 1
+    automaticFailoverEnabled: false
+    atRestEncryptionEnabled: true
+    transitEncryptionEnabled: true
+    tags:
+      component: "{{.Component}}"
+      managed-by: confighub
+  providerConfigRef:
+    name: aws-default

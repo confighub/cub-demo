@@ -1,0 +1,20 @@
+units:
+  - {slug: namespace, file: namespace.yaml}
+  - {slug: api, file: api.yaml}
+values:
+  version: 1.8.3
+perClass:
+  dev:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'api'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'api'"}
+  test:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'api'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'api'"}
+  uat:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'api'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'api'"}
+  prod:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'api'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'api'"}
+perRegion:
+  - {function: set-env-var, args: ["*", "AWS_REGION", "{{.Region.ProviderRegion}}"], where: "Slug = 'api'"}

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-gateway-config
+  namespace: payment-gateway
+data:
+  ACQUIRER_PRIMARY: stripe
+  ACQUIRER_FALLBACK: adyen
+  THREE_DS_MODE: enforced
+  LEDGER_URL: http://ledger-api.ledger.svc
+  PCI_SCOPE: "true"

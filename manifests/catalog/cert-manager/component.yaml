@@ -1,0 +1,28 @@
+units:
+  - {slug: namespace, file: namespace.yaml}
+  - {slug: controller, file: controller.yaml}
+  - {slug: webhook, file: webhook.yaml}
+  - {slug: cainjector, file: cainjector.yaml}
+  - {slug: cluster-issuer, file: cluster-issuer.yaml}
+# What "cub demo ci cert-manager" bumps.
+release: {unit: controller, container: cert-manager-controller}
+values:
+  version: v1.16.1
+  acmeServer: https://acme-v02.api.letsencrypt.org/directory
+perClass:
+  dev:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug IN ('controller', 'webhook', 'cainjector')"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.cpu", "250m"], where: "Slug = 'controller'"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.memory", "256Mi"], where: "Slug = 'controller'"}
+  test:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug IN ('controller', 'webhook', 'cainjector')"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.cpu", "250m"], where: "Slug = 'controller'"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.memory", "256Mi"], where: "Slug = 'controller'"}
+  uat:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug IN ('controller', 'webhook', 'cainjector')"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.cpu", "500m"], where: "Slug = 'controller'"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.memory", "512Mi"], where: "Slug = 'controller'"}
+  prod:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug IN ('controller', 'webhook', 'cainjector')"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.cpu", "1000m"], where: "Slug = 'controller'"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.memory", "1Gi"], where: "Slug = 'controller'"}

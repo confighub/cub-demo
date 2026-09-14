@@ -1,0 +1,22 @@
+units:
+  - {slug: namespace, file: namespace.yaml}
+  - {slug: web, file: web.yaml}
+  - {slug: config, file: config.yaml}
+  - {slug: ingress, file: ingress.yaml}
+values:
+  version: 3.4.2
+perClass:
+  dev:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'web'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'web'"}
+  test:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'web'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'web'"}
+  uat:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'web'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'web'"}
+  prod:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'web'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'web'"}
+perRegion:
+  - {function: set-env-var, args: ["*", "AWS_REGION", "{{.Region.ProviderRegion}}"], where: "Slug = 'web'"}

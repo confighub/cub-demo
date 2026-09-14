@@ -1,0 +1,13 @@
+units:
+  - {slug: namespace, file: namespace.yaml}
+  - {slug: controller, file: controller.yaml}
+  - {slug: cluster-secret-store, file: cluster-secret-store.yaml}
+values:
+  version: v0.10.5
+perClass:
+  uat:
+    - {function: set-replicas, args: ["2"], where: "Slug = 'controller'"}
+  prod:
+    - {function: set-replicas, args: ["2"], where: "Slug = 'controller'"}
+perRegion:
+  - {function: set-string-path, args: ["external-secrets.io/v1beta1/ClusterSecretStore", "spec.provider.aws.region", "{{.Region.ProviderRegion}}"], where: "Slug = 'cluster-secret-store'"}

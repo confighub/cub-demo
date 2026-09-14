@@ -1,0 +1,21 @@
+units:
+  - {slug: namespace, file: namespace.yaml}
+  - {slug: operator, file: operator.yaml}
+  - {slug: prometheus, file: prometheus.yaml}
+  - {slug: alertmanager, file: alertmanager.yaml}
+  - {slug: grafana, file: grafana.yaml}
+  - {slug: service-monitors, file: service-monitors.yaml}
+values:
+  operatorVersion: v0.78.1
+  grafanaVersion: "11.3.0"
+perClass:
+  dev:
+    - {function: set-string-path, args: ["monitoring.coreos.com/v1/Prometheus", "spec.retention", "{{.Class.Values.retention}}"], where: "Slug = 'prometheus'"}
+  test:
+    - {function: set-string-path, args: ["monitoring.coreos.com/v1/Prometheus", "spec.retention", "{{.Class.Values.retention}}"], where: "Slug = 'prometheus'"}
+  uat:
+    - {function: set-string-path, args: ["monitoring.coreos.com/v1/Prometheus", "spec.retention", "{{.Class.Values.retention}}"], where: "Slug = 'prometheus'"}
+  prod:
+    - {function: set-string-path, args: ["monitoring.coreos.com/v1/Prometheus", "spec.retention", "{{.Class.Values.retention}}"], where: "Slug = 'prometheus'"}
+    - {function: set-int-path, args: ["monitoring.coreos.com/v1/Prometheus", "spec.replicas", "2"], where: "Slug = 'prometheus'"}
+    - {function: set-replicas, args: ["2"], where: "Slug = 'grafana'"}

@@ -1,0 +1,13 @@
+units:
+  - {slug: namespace, file: namespace.yaml}
+  - {slug: rbac, file: rbac.yaml}
+  - {slug: controller, file: controller.yaml}
+values:
+  version: v0.15.0
+perClass:
+  prod:
+    - {function: set-replicas, args: ["2"], where: "Slug = 'controller'"}
+perRegion:
+  - {function: set-env-var, args: ["*", "EXTERNAL_DNS_DOMAIN_FILTER", "{{.Region.DNSZone}}"], where: "Slug = 'controller'"}
+perCluster:
+  - {function: set-env-var, args: ["*", "EXTERNAL_DNS_TXT_OWNER_ID", "{{.Cluster.Name}}"], where: "Slug = 'controller'"}

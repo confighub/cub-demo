@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-scoring-scorer
+  namespace: fraud-scoring
+  labels:
+    app.kubernetes.io/name: fraud-scoring
+    app.kubernetes.io/component: scorer
+    app.kubernetes.io/part-of: fraud-scoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fraud-scoring
+      app.kubernetes.io/component: scorer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fraud-scoring
+        app.kubernetes.io/component: scorer
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8501"
+    spec:
+      containers:
+        - name: scorer
+          image: registry.{{.Scenario.Domain}}/fraud-scoring/scorer:{{.Values.version}}
+          ports:
+            - name: http
+              containerPort: 8501
+          env:
+            - name: LOG_LEVEL
+              value: debug
+            - name: AWS_REGION
+              value: us-east-1
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: 2.2.0-conn
+                  key: endpoint
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fraud-scoring-scorer
+  namespace: fraud-scoring
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: fraud-scoring
+    app.kubernetes.io/component: scorer

@@ -1,0 +1,27 @@
+# Company-wide edge policy, referenced by every ingress route:
+# security headers per the {{.Scenario.Company}} baseline, and a compress
+# middleware services opt into.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: security-headers
+  namespace: traefik
+spec:
+  headers:
+    stsSeconds: 31536000
+    stsIncludeSubdomains: true
+    browserXssFilter: true
+    contentTypeNosniff: true
+    frameDeny: true
+    customResponseHeaders:
+      X-Operated-By: "{{.Scenario.Company}}"
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: compress
+  namespace: traefik
+spec:
+  compress:
+    excludedContentTypes:
+      - text/event-stream

@@ -1,0 +1,18 @@
+# An SQS queue for {{.Component}}.
+apiVersion: sqs.aws.upbound.io/v1beta1
+kind: Queue
+metadata:
+  name: "{{.Name}}"
+  labels:
+    app.kubernetes.io/part-of: "{{.Component}}"
+spec:
+  forProvider:
+    region: us-east-1
+    messageRetentionSeconds: 345600
+    visibilityTimeoutSeconds: 60
+    sqsManagedSseEnabled: true
+    tags:
+      component: "{{.Component}}"
+      managed-by: confighub
+  providerConfigRef:
+    name: aws-default

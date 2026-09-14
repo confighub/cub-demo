@@ -1,0 +1,45 @@
+units:
+  - {slug: namespace, file: namespace.yaml}
+  - {slug: api, file: api.yaml}
+  - {slug: config, file: config.yaml}
+values:
+  version: 5.2.0
+# What "cub demo ci catalog-api" bumps.
+release: {unit: api, container: api}
+# One cluster has its own memory limit and protects it: us-east-prod1 doubled
+# it after an OOM incident under peak traffic. Its class base and sibling
+# clusters run the fleet default, so a base change that raises the default
+# reaches every cluster but this one, where it is withheld.
+perVariant:
+  us-east-prod1:
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.memory", "2Gi"], where: "Slug = 'api'"}
+protect:
+  prod:
+    - {unit: api, variants: [us-east-prod1], paths: ["apps/v1/Deployment:catalog-api/catalog-api-api:spec.template.spec.containers.?name=api.resources.limits.memory"]}
+perClass:
+  dev:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.cpu", "250m"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.memory", "512Mi"], where: "Slug = 'api'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'catalog-db'"}
+  test:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.cpu", "250m"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.memory", "512Mi"], where: "Slug = 'api'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'catalog-db'"}
+  uat:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.cpu", "500m"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.memory", "1Gi"], where: "Slug = 'api'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'catalog-db'"}
+  prod:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.cpu", "1000m"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["apps/v1/Deployment", "spec.template.spec.containers.0.resources.limits.memory", "512Mi"], where: "Slug = 'api'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'catalog-db'"}
+perRegion:
+  - {function: set-env-var, args: ["*", "AWS_REGION", "{{.Region.ProviderRegion}}"], where: "Slug = 'api'"}

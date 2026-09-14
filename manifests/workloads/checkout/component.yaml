@@ -1,0 +1,25 @@
+units:
+  - {slug: namespace, file: namespace.yaml}
+  - {slug: api, file: api.yaml}
+  - {slug: worker, file: worker.yaml}
+values:
+  version: 4.1.0
+perClass:
+  dev:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug IN ('api', 'worker')"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug IN ('api', 'worker')"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'checkout-db'"}
+  test:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug IN ('api', 'worker')"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug IN ('api', 'worker')"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'checkout-db'"}
+  uat:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug IN ('api', 'worker')"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug IN ('api', 'worker')"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'checkout-db'"}
+  prod:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug IN ('api', 'worker')"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug IN ('api', 'worker')"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'checkout-db'"}
+perRegion:
+  - {function: set-env-var, args: ["*", "AWS_REGION", "{{.Region.ProviderRegion}}"], where: "Slug IN ('api', 'worker')"}

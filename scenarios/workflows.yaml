@@ -1,0 +1,96 @@
+# A small scenario for demoing change workflows specifically: one region,
+# three classes, six clusters, three components — little enough that every
+# stage fits on a screen, wired so the workflow feature itself is the star:
+# per-stage gates differ, one rollout is ready to advance, one is blocked.
+# Lives in its own org; the context pin keeps it there.
+name: workflows
+context: demo
+company: Meridian Group
+domain: meridian.example
+cloud: aws
+
+regions:
+  - {name: us-east, providerRegion: us-east-1, dnsZone: use1.meridian.example, locality: "Virginia, US"}
+
+classes:
+  - {name: dev,  replicas: 1, logLevel: debug, size: small, dbClass: db.t3.micro,  multiAZ: false, nodeCount: 3}
+  - {name: test, replicas: 2, logLevel: info,  size: medium, dbClass: db.t3.small, multiAZ: false, nodeCount: 3}
+  - {name: prod, replicas: 3, logLevel: warn,  size: large, dbClass: db.r6g.large, multiAZ: true,  nodeCount: 9}
+
+departments: []
+
+clusters:
+  kubernetesVersions: ["1.32"]
+  rules:
+    - {class: dev,  department: shared, count: {us-east: 1}}
+    - {class: test, department: shared, count: {us-east: 2}}
+    - {class: prod, department: shared, count: {us-east: 3}}
+
+catalog:
+  - {name: cert-manager, owner: platform-team, dir: catalog/cert-manager}
+  - {name: traefik,      owner: platform-team, dir: catalog/traefik}
+
+workloads:
+  - name: catalog-api
+    owner: retail-platform
+    department: shared
+    dir: workloads/catalog-api
+    external: [{kind: rds, name: catalog-db}]
+    # Chapter 1 opens the healthy gate only after argobot reports, so nothing
+    # is painted at seed time.
+    liveStatus: none
+
+# The point of this scenario: gates differ per stage. test asks only that dev
+# released; prod additionally requires test healthy.
+workflows:
+  prerequisites:
+    test:  [released]
+    prod:  [released, healthy]
+    final: [released, healthy]
+  # catalog-api seeds clean: chapter 1 opens its change order on stage with
+  # "cub demo ci". The blocked rollout is cert-manager's, for chapter 2.
+  changeOrders:
+    - {component: cert-manager, slug: cert-manager-1-17-0, description: "Bump cert-manager to v1.17.0",
+       unit: controller, function: set-image-reference, args: [cert-manager-controller, ":v1.17.0"],
+       landedThrough: test, degrade: 1}
+
+# The presenter's moves, run with "cub demo play <name>". Plain cub and the
+# demo verbs; no slugs and no versions, so a chapter runs twice without a
+# teardown. Lines are Go templates: {{.Home}}, {{.Base "x"}}, {{.Workflow "x"}}.
+# The scenario's vocabulary: every actor and beat of the demo is a play
+# composed from the tool's generic primitives. "ci" and "argobot" are names
+# this demo chose, not features of the tool.
+plays:
+  ship:
+    - call: bump-image
+      with: {component: catalog-api, strategy: minor}
+    - call: invoke
+      with:
+        space: '{{.Base "catalog-api"}}'
+        unit: api
+        function: set-string-path
+        args: [apps/v1/Deployment, spec.template.spec.containers.0.resources.limits.memory, 1Gi]
+        change-desc: 'catalog-api {{.Version}}: memory limit 1Gi'
+    - call: changeorder
+      with: {component: catalog-api, description: 'catalog-api {{.Version}}'}
+  argobot-test:
+    - call: observe
+      with: {component: catalog-api, stage: test, when: release-newer}
+  argobot-prod:
+    - call: observe
+      with: {component: catalog-api, stage: prod, when: release-newer}
+  oom-incident:
+    - call: observe
+      with:
+        component: catalog-api
+        variants: [us-east-test1]
+        health: Degraded
+        message: 'catalog-api: rollout stalled, 1 pod CrashLoopBackOff'
+  heal-test1:
+    - call: observe
+      with: {component: catalog-api, variants: [us-east-test1]}
+
+story:
+  seed: 11
+  liveStatus: {degradedPercent: 0, outOfSyncPercent: 0, progressingPercent: 0}
+  unreleased: {percent: 0}

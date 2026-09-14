@@ -1,0 +1,163 @@
+# Meridian Group: a fictional global retail / payments / logistics company, all
+# on AWS. The default scenario. Around a hundred clusters, a platform catalog
+# deployed to most of them, business workloads placed by department.
+name: meridian
+context: meridian-demo
+company: Meridian Group
+domain: meridian.example
+cloud: aws
+
+regions:
+  - {name: us-east,      providerRegion: us-east-1,      dnsZone: use1.meridian.example, locality: "Virginia, US"}
+  - {name: us-west,      providerRegion: us-west-2,      dnsZone: usw2.meridian.example, locality: "Oregon, US"}
+  - {name: eu-central,   providerRegion: eu-central-1,   dnsZone: euc1.meridian.example, locality: "Frankfurt, DE"}
+  - {name: eu-west,      providerRegion: eu-west-1,      dnsZone: euw1.meridian.example, locality: "Dublin, IE"}
+  - {name: eu-north,     providerRegion: eu-north-1,     dnsZone: eun1.meridian.example, locality: "Stockholm, SE"}
+  - {name: ap-southeast, providerRegion: ap-southeast-1, dnsZone: apse1.meridian.example, locality: "Singapore, SG"}
+  - {name: ap-northeast, providerRegion: ap-northeast-1, dnsZone: apne1.meridian.example, locality: "Tokyo, JP"}
+  - {name: sa-east,      providerRegion: sa-east-1,      dnsZone: sae1.meridian.example, locality: "São Paulo, BR"}
+
+# Listed in promotion order. The knobs are what a class base changes relative
+# to the root base; component.yaml perClass lists reference them.
+classes:
+  - {name: dev,  replicas: 1, logLevel: debug, size: small,  dbClass: db.t3.micro,   multiAZ: false, nodeCount: 3,  values: {retention: 24h}}
+  - {name: test, replicas: 1, logLevel: debug, size: small,  dbClass: db.t3.small,   multiAZ: false, nodeCount: 3,  values: {retention: 24h}}
+  - {name: uat,  replicas: 2, logLevel: info,  size: medium, dbClass: db.r6g.large,  multiAZ: false, nodeCount: 6,  values: {retention: 168h}}
+  - {name: prod, replicas: 3, logLevel: warn,  size: large,  dbClass: db.r6g.xlarge, multiAZ: true,  nodeCount: 12, values: {retention: 720h}}
+
+departments: [retail, payments, logistics]
+
+clusters:
+  kubernetesVersions: ["1.30", "1.31", "1.32"]
+  rules:
+    # shared clusters: dev/test/uat in every region, prod scaled out by demand
+    - {class: dev,  department: shared, count: {default: 1, us-east: 2, eu-central: 2}}
+    - {class: test, department: shared, count: {default: 1}}
+    - {class: uat,  department: shared, count: {default: 1}}
+    - {class: prod, department: shared, count: {us-east: 3, us-west: 2, eu-central: 3, eu-west: 2, eu-north: 2, ap-southeast: 2, ap-northeast: 2, sa-east: 1}}
+    # retail: customer-facing, everywhere in prod
+    - {class: dev,  department: retail, count: {us-east: 1, eu-west: 1}}
+    - {class: test, department: retail, count: {us-east: 1, eu-west: 1}}
+    - {class: uat,  department: retail, count: {us-east: 1, eu-west: 1, ap-southeast: 1}}
+    - {class: prod, department: retail, count: {us-east: 3, us-west: 2, eu-central: 2, eu-west: 2, eu-north: 1, ap-southeast: 2, ap-northeast: 2, sa-east: 1}}
+    # payments: regulated, its own clusters in every class, no South America
+    - {class: dev,  department: payments, count: {us-east: 1, eu-central: 1}}
+    - {class: test, department: payments, count: {us-east: 1, eu-central: 1}}
+    - {class: uat,  department: payments, count: {us-east: 1, eu-central: 1}}
+    - {class: prod, department: payments, count: {us-east: 3, us-west: 2, eu-central: 3, eu-west: 2, ap-southeast: 2, ap-northeast: 1}}
+    # logistics: one per region in prod, a few lower environments
+    - {class: dev,  department: logistics, count: {us-east: 1, eu-central: 1}}
+    - {class: test, department: logistics, count: {eu-central: 1}}
+    - {class: uat,  department: logistics, count: {us-east: 1, eu-central: 1}}
+    - {class: prod, department: logistics, count: {us-east: 2, us-west: 1, eu-central: 2, eu-west: 1, eu-north: 1, ap-southeast: 1, ap-northeast: 1, sa-east: 1}}
+
+# The platform catalog. No placement means every cluster.
+catalog:
+  - {name: cert-manager,          owner: platform-team, dir: catalog/cert-manager}
+  - {name: external-dns,          owner: platform-team, dir: catalog/external-dns}
+  - {name: external-secrets,      owner: platform-team, dir: catalog/external-secrets}
+  - {name: traefik,               owner: platform-team, dir: catalog/traefik}
+  - {name: kube-prometheus-stack, owner: platform-sre,  dir: catalog/kube-prometheus-stack}
+  - {name: fluent-bit,            owner: platform-sre,  dir: catalog/fluent-bit}
+  - {name: kyverno,               owner: platform-sec,  dir: catalog/kyverno, placement: [{classes: [test, uat, prod]}]}
+  - {name: velero,                owner: platform-sre,  dir: catalog/velero,  placement: [{classes: [uat, prod]}]}
+
+# Business workloads. Placement is the union of the rules: a workload runs on
+# its own department's clusters, and usually on the shared dev/test ones.
+workloads:
+  - name: storefront
+    owner: retail-web
+    department: retail
+    dir: workloads/storefront
+    placement:
+      - {departments: [retail], exclude: {regions: [sa-east]}}
+      - {departments: [shared], classes: [dev, test]}
+  - name: catalog-api
+    owner: retail-platform
+    department: retail
+    dir: workloads/catalog-api
+    external: [{kind: rds, name: catalog-db}]
+    placement:
+      - {departments: [retail]}
+      - {departments: [shared], classes: [dev, test]}
+  - name: cart
+    owner: retail-platform
+    department: retail
+    dir: workloads/cart
+    external: [{kind: cache, name: cart-cache}]
+    placement:
+      - {departments: [retail], exclude: {regions: [sa-east, eu-north]}}
+      - {departments: [shared], classes: [dev]}
+  - name: checkout
+    owner: retail-platform
+    department: retail
+    dir: workloads/checkout
+    external: [{kind: rds, name: checkout-db}, {kind: queue, name: order-events}]
+    placement:
+      - {departments: [retail], classes: [uat, prod], exclude: {regions: [sa-east]}}
+      - {departments: [shared], classes: [dev, test]}
+  - name: search
+    owner: retail-web
+    department: retail
+    dir: workloads/search
+    external: [{kind: bucket, name: search-index}]
+    placement:
+      - {departments: [retail], maxIndex: 2}
+      - {departments: [shared], classes: [dev]}
+  - name: payment-gateway
+    owner: payments-core
+    department: payments
+    dir: workloads/payment-gateway
+    external: [{kind: rds, name: gateway-db}]
+    placement: [{departments: [payments]}]
+  - name: ledger
+    owner: payments-core
+    department: payments
+    dir: workloads/ledger
+    external: [{kind: rds, name: ledger-db}]
+    placement: [{departments: [payments], classes: [test, uat, prod]}]
+  - name: fraud-scoring
+    owner: payments-risk
+    department: payments
+    dir: workloads/fraud-scoring
+    external: [{kind: bucket, name: fraud-models}]
+    placement: [{departments: [payments], classes: [uat, prod], exclude: {regions: [ap-northeast]}}]
+  - name: shipment-tracker
+    owner: logistics-eng
+    department: logistics
+    dir: workloads/shipment-tracker
+    external: [{kind: rds, name: tracker-db}, {kind: queue, name: shipment-events}]
+    placement: [{departments: [logistics]}]
+  - name: warehouse-api
+    owner: logistics-eng
+    department: logistics
+    dir: workloads/warehouse-api
+    external: [{kind: rds, name: warehouse-db}]
+    placement: [{departments: [logistics], classes: [uat, prod]}]
+  - name: identity
+    owner: platform-team
+    department: shared
+    dir: workloads/identity
+    external: [{kind: rds, name: identity-db}]
+    placement: [{departments: [shared]}]
+
+story:
+  seed: 42
+  liveStatus: {degradedPercent: 2, outOfSyncPercent: 1, progressingPercent: 2}
+  unreleased: {percent: 2}
+  skews:
+    - {component: cert-manager, unit: controller, function: set-image-reference, args: [cert-manager-controller, ":v1.16.2"], where: {regions: [eu-west], classes: [prod]}}
+    - {component: catalog-api, unit: api, function: set-image-reference, args: [api, ":v3.8.1"], where: {regions: [ap-northeast], classes: [prod]}}
+
+# One generated workflow per component: a "bases" stage distributes a change to
+# every class base, then deployments land class by class, gated released+healthy
+# on the class before. Three changes are in flight: one ready to advance, one
+# blocked by a degraded uat deployment, one fully landed.
+workflows:
+  changeOrders:
+    - {component: cert-manager, slug: cert-manager-1-17-2, description: "Bump cert-manager to v1.17.2",
+       unit: controller, function: set-image-reference, args: [cert-manager-controller, ":v1.17.2"], landedThrough: test}
+    - {component: shipment-tracker, slug: shipment-tracker-6-5-2, description: "shipment-tracker 6.5.2: retry storm fix",
+       unit: api, function: set-image-reference, args: [api, ":6.5.2"], landedThrough: uat, degrade: 1}
+    - {component: kyverno, slug: kyverno-pinned-digests, description: "Require pinned image digests in prod",
+       unit: controller, function: set-image-reference, args: [kyverno, ":v1.13.3"], landedThrough: prod}

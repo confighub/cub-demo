@@ -1,0 +1,8 @@
+units:
+  - {slug: namespace, file: namespace.yaml}
+  - {slug: config, file: config.yaml}
+  - {slug: daemonset, file: daemonset.yaml}
+values:
+  version: "3.1.9"
+perRegion:
+  - {function: set-string-path, args: ["v1/ConfigMap", "data.region", "{{.Region.ProviderRegion}}"], where: "Slug = 'config'"}

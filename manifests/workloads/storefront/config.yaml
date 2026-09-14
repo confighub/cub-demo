@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: storefront-config
+  namespace: storefront
+data:
+  CATALOG_URL: http://catalog-api-api.catalog-api.svc
+  CART_URL: http://cart-api.cart.svc
+  CHECKOUT_URL: http://checkout-api.checkout.svc
+  FEATURE_RECOMMENDATIONS: "true"
+  CDN_BASE: https://cdn.{{.Scenario.Domain}}

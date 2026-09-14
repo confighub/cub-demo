@@ -1,0 +1,57 @@
+# A small scenario for end-to-end tests and quick trials: two regions, two
+# classes, two catalog components, two workloads, ten clusters. Fits the
+# default org quotas.
+name: e2e
+company: Meridian Group
+domain: meridian.example
+cloud: aws
+
+# Region and component names are deliberately disjoint from meridian's: space
+# slugs are org-global, and the seeder refuses to adopt a space another
+# scenario owns.
+regions:
+  - {name: e2e-east, providerRegion: us-east-1,    dnsZone: e2e1.meridian.example, locality: "Virginia, US"}
+  - {name: e2e-west, providerRegion: eu-central-1, dnsZone: e2e2.meridian.example, locality: "Frankfurt, DE"}
+
+classes:
+  - {name: dev,  replicas: 1, logLevel: debug, size: small, dbClass: db.t3.micro,  multiAZ: false, nodeCount: 3}
+  - {name: prod, replicas: 3, logLevel: warn,  size: large, dbClass: db.r6g.large, multiAZ: true,  nodeCount: 9}
+
+departments: [retail]
+
+clusters:
+  kubernetesVersions: ["1.31", "1.32"]
+  rules:
+    - {class: dev,  department: shared, count: {default: 1}}
+    - {class: prod, department: shared, count: {default: 2}}
+    - {class: dev,  department: retail, count: {e2e-east: 1}}
+    - {class: prod, department: retail, count: {e2e-east: 2, e2e-west: 1}}
+
+catalog:
+  - {name: e2e-cert-manager, owner: platform-team, dir: catalog/cert-manager}
+  - {name: e2e-traefik,      owner: platform-team, dir: catalog/traefik}
+
+workloads:
+  - name: e2e-storefront
+    owner: retail-web
+    department: retail
+    dir: workloads/storefront
+    placement:
+      - {departments: [retail]}
+      - {departments: [shared], classes: [dev]}
+  - name: e2e-catalog-api
+    owner: retail-platform
+    department: retail
+    dir: workloads/catalog-api
+    external: [{kind: rds, name: catalog-db}]
+    placement: [{departments: [retail]}]
+
+workflows:
+  changeOrders:
+    - {component: e2e-cert-manager, slug: e2e-cm-bump, description: "e2e: bump cert-manager",
+       unit: controller, function: set-image-reference, args: [cert-manager-controller, ":v1.16.9"], landedThrough: dev}
+
+story:
+  seed: 7
+  liveStatus: {degradedPercent: 10, outOfSyncPercent: 0, progressingPercent: 0}
+  unreleased: {percent: 10}

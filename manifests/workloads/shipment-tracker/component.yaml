@@ -1,0 +1,25 @@
+units:
+  - {slug: namespace, file: namespace.yaml}
+  - {slug: api, file: api.yaml}
+  - {slug: tracker, file: tracker.yaml}
+values:
+  version: 6.4.1
+perClass:
+  dev:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug IN ('api', 'tracker')"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug IN ('api', 'tracker')"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'tracker-db'"}
+  test:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug IN ('api', 'tracker')"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug IN ('api', 'tracker')"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'tracker-db'"}
+  uat:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug IN ('api', 'tracker')"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug IN ('api', 'tracker')"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'tracker-db'"}
+  prod:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug IN ('api', 'tracker')"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug IN ('api', 'tracker')"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'tracker-db'"}
+perRegion:
+  - {function: set-env-var, args: ["*", "AWS_REGION", "{{.Region.ProviderRegion}}"], where: "Slug IN ('api', 'tracker')"}

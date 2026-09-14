@@ -1,0 +1,24 @@
+units:
+  - {slug: namespace, file: namespace.yaml}
+  - {slug: api, file: api.yaml}
+values:
+  version: 2.5.0
+perClass:
+  dev:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'api'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'warehouse-db'"}
+  test:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'api'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'warehouse-db'"}
+  uat:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'api'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'warehouse-db'"}
+  prod:
+    - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'api'"}
+    - {function: set-env-var, args: ["*", "LOG_LEVEL", "{{.Class.LogLevel}}"], where: "Slug = 'api'"}
+    - {function: set-string-path, args: ["rds.aws.upbound.io/v1beta2/Instance", "spec.forProvider.instanceClass", "{{.Class.DBClass}}"], where: "Slug = 'warehouse-db'"}
+perRegion:
+  - {function: set-env-var, args: ["*", "AWS_REGION", "{{.Region.ProviderRegion}}"], where: "Slug = 'api'"}

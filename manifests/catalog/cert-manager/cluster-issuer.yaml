@@ -1,0 +1,26 @@
+# The company-wide issuer: DNS-01 over Route 53, so certificates for internal
+# services need no reachable HTTP endpoint. The hosted zone is the region's
+# delegated subdomain of {{.Scenario.Domain}}.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    email: platform-team@{{.Scenario.Domain}}
+    server: "{{.Values.acmeServer}}"
+    privateKeySecretRef:
+      name: letsencrypt-account-key
+    solvers:
+      - selector: {}
+        dns01:
+          route53:
+            region: us-east-1
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: internal-ca
+spec:
+  ca:
+    secretName: "{{.Component}}-internal-ca"

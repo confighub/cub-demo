@@ -1,0 +1,41 @@
+# The {{.Scenario.Company}} baseline policies. validationFailureAction is
+# Audit below prod-like classes and Enforce from uat up (set per class).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-workload-labels
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-part-of
+      match:
+        any:
+          - resources:
+              kinds: [Deployment, StatefulSet, DaemonSet]
+      validate:
+        message: "workloads must carry app.kubernetes.io/part-of"
+        pattern:
+          metadata:
+            labels:
+              app.kubernetes.io/part-of: "?*"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-pinned-images
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "images must be pinned; :latest is not allowed"
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"

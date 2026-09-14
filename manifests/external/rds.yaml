@@ -1,0 +1,33 @@
+# A managed PostgreSQL instance for {{.Component}}, provisioned by the
+# platform's Crossplane management cluster. Region and instance class are set
+# per deployment by the seeder; the values here are the root-base defaults.
+apiVersion: rds.aws.upbound.io/v1beta2
+kind: Instance
+metadata:
+  name: "{{.Name}}"
+  labels:
+    app.kubernetes.io/part-of: "{{.Component}}"
+spec:
+  forProvider:
+    region: us-east-1
+    engine: postgres
+    engineVersion: "16.4"
+    instanceClass: db.t3.micro
+    allocatedStorage: 50
+    storageType: gp3
+    storageEncrypted: true
+    multiAz: false
+    dbName: "{{.Component}}"
+    username: "{{.Component}}"
+    autoGeneratePassword: true
+    masterUserSecretKmsKeyId: alias/{{.Scenario.Name}}-rds
+    backupRetentionPeriod: 7
+    skipFinalSnapshot: false
+    tags:
+      component: "{{.Component}}"
+      managed-by: confighub
+  providerConfigRef:
+    name: aws-default
+  writeConnectionSecretToRef:
+    name: "{{.Name}}-conn"
+    namespace: "{{.Component}}"

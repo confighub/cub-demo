@@ -1,0 +1,13 @@
+units:
+  - {slug: namespace, file: namespace.yaml}
+  - {slug: server, file: server.yaml}
+  - {slug: storage-location, file: storage-location.yaml}
+  - {slug: backup-schedule, file: backup-schedule.yaml}
+values:
+  version: v1.15.0
+perClass:
+  prod:
+    - {function: set-string-path, args: ["velero.io/v1/Schedule", "spec.schedule", "0 */6 * * *"], where: "Slug = 'backup-schedule'"}
+perRegion:
+  - {function: set-string-path, args: ["velero.io/v1/BackupStorageLocation", "spec.config.region", "{{.Region.ProviderRegion}}"], where: "Slug = 'storage-location'"}
+  - {function: set-string-path, args: ["velero.io/v1/BackupStorageLocation", "spec.objectStorage.bucket", "{{.Scenario.Name}}-velero-{{.Region.ProviderRegion}}"], where: "Slug = 'storage-location'"}
