@@ -130,7 +130,7 @@ type Component struct {
 
 	// LiveStatus overrides how the livestatus phase paints this component's
 	// deployments. "none" paints nothing, so a healthy gate is only ever
-	// satisfied after "cub demo argobot" reports; empty means the fleet default.
+	// satisfied after an observe play reports; empty means the fleet default.
 	LiveStatus string `yaml:"liveStatus"`
 }
 
@@ -252,8 +252,9 @@ type ComponentSpec struct {
 	// protection lives on a unit's MutationSources and does not survive cloning.
 	Protect map[string][]Protection `yaml:"protect"`
 
-	// Release names what "cub demo ci" bumps: the unit and the container that
-	// carry the component's own image. A component without one cannot be shipped.
+	// Release names what the bump-image primitive bumps: the unit and the
+	// container that carry the component's own image. A component without one
+	// cannot be shipped by a play.
 	Release *ReleaseSpec `yaml:"release"`
 }
 

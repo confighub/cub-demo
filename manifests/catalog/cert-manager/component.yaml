@@ -4,7 +4,7 @@ units:
   - {slug: webhook, file: webhook.yaml}
   - {slug: cainjector, file: cainjector.yaml}
   - {slug: cluster-issuer, file: cluster-issuer.yaml}
-# What "cub demo ci cert-manager" bumps.
+# What the bump-image primitive bumps for cert-manager.
 release: {unit: controller, container: cert-manager-controller}
 values:
   version: v1.16.1

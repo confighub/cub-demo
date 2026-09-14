@@ -4,7 +4,7 @@ units:
   - {slug: config, file: config.yaml}
 values:
   version: 5.2.0
-# What "cub demo ci catalog-api" bumps.
+# What the bump-image primitive bumps for catalog-api.
 release: {unit: api, container: api}
 # One cluster has its own memory limit and protects it: us-east-prod1 doubled
 # it after an OOM incident under peak traffic. Its class base and sibling

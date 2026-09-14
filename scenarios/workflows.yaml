@@ -48,7 +48,7 @@ workflows:
     prod:  [released, healthy]
     final: [released, healthy]
   # catalog-api seeds clean: chapter 1 opens its change order on stage with
-  # "cub demo ci". The blocked rollout is cert-manager's, for chapter 2.
+  # the "ship" play. The blocked rollout is cert-manager's, for chapter 2.
   changeOrders:
     - {component: cert-manager, slug: cert-manager-1-17-0, description: "Bump cert-manager to v1.17.0",
        unit: controller, function: set-image-reference, args: [cert-manager-controller, ":v1.17.0"],

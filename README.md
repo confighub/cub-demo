@@ -85,6 +85,7 @@ seeder refuses to adopt spaces owned by another scenario.
 
 ## Docs
 
+- [docs/authoring-scenarios.md](docs/authoring-scenarios.md) — how to write a scenario: schema, component.yaml, templates, plays
 - [docs/DESIGN.md](docs/DESIGN.md) — decisions, the product facts the seeder relies on, the pipeline
 - [docs/DATA-MODEL.md](docs/DATA-MODEL.md) — what gets created: spaces, labels, slugs, facts, queries
 - [docs/ROADMAP.md](docs/ROADMAP.md) — milestone history and follow-ups

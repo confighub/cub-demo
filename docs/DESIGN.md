@@ -228,46 +228,12 @@ disambiguates when one org holds several demos (plays export it to child command
 
 ## Scenario file
 
-The schema is defined in `internal/scenario/schema.go` and documented there; `scenarios/` holds
-the embedded ones. The shape, in outline:
-
-```yaml
-name: meridian                 # the DemoName label and the home-space prefix
-company: Meridian Group
-domain: meridian.example
-cloud: aws
-regions:      [{name: us-east, providerRegion: us-east-1, dnsZone: use1.meridian.example, locality: "Virginia, US"}, …]
-classes:      [{name: dev, replicas: 1, logLevel: debug, size: small, dbClass: db.t3.micro, multiAZ: false, nodeCount: 3}, …]   # order = promotion order
-departments:  [retail, payments, logistics]           # "shared" is implicit
-clusters:
-  kubernetesVersions: ["1.30", "1.31", "1.32"]        # assigned deterministically per cluster
-  rules: [{class: prod, department: shared, count: {us-east: 3, us-west: 2, default: 1}}, …]   # plus an optional explicit list
-catalog:
-  - {name: cert-manager, owner: platform-team, dir: catalog/cert-manager}      # no placement = every cluster
-  - {name: velero, owner: platform-sre, dir: catalog/velero, placement: [{classes: [uat, prod]}]}
-workloads:
-  - name: storefront
-    owner: retail-web
-    department: retail
-    dir: workloads/storefront
-    external: [{kind: rds, name: storefront-db}]      # each becomes a Crossplane unit
-    placement:                                        # union of rules; each rule intersects its fields
-      - {departments: [retail], exclude: {regions: [sa-east]}}
-      - {departments: [shared], classes: [dev, test]}
-story:
-  seed: 42
-  liveStatus: {degradedPercent: 2, outOfSyncPercent: 1, progressingPercent: 2}
-  unreleased: {percent: 2}
-  skews: [{component: catalog-api, function: set-image-reference, args: [api, ":v3.8.1"], where: {regions: [ap-northeast], classes: [prod]}}]
-workflows:                      # milestone 6; shape follows the product specification
-  template: workflows/default.yaml.tmpl
-  changeOrders: [{component: cert-manager, slug: cert-manager-1-16-2, function: set-image-reference, args: […], landedThrough: test}]
-```
-
-Each component directory carries a `component.yaml` naming its units (one manifest file each),
-template values, and the function lists to apply per class, per region and per cluster. Cluster
-names are `<region>-<class><n>` for shared clusters and `<region>-<dept>-<class><n>` for
-departmental ones; a class base exists only for classes the component is placed on.
+The schema is defined in `internal/scenario/schema.go`; the authoring reference — scenario.yaml,
+component.yaml, template contexts, plays and the rules that bite — is
+[authoring-scenarios.md](authoring-scenarios.md), and `scenarios/` holds the embedded worked
+examples. The design principle: manifests are rendered once for the root base, and all class,
+region and cluster variation is applied by ConfigHub functions, so every difference is real
+recorded history rather than templating.
 
 A scenario given by path (`cub demo install dir/x.yaml`) resolves component directories from
 `dir/manifests/<dir>` first and falls back to the embedded ones, so `cub demo scenario export`
