@@ -32,12 +32,16 @@ func (c PlayContext) Base(component string) (string, error) {
 	return "", fmt.Errorf("no component %q", component)
 }
 
-// Workflow is the component's ChangeWorkflow unit as space/slug.
+// Workflow is the shared ChangeWorkflow the component's change orders bind,
+// as space/slug: the one matching its class coverage (most components share
+// the standard one).
 func (c PlayContext) Workflow(component string) (string, error) {
-	if _, err := c.Base(component); err != nil {
-		return "", err
+	for _, cm := range c.model.Components {
+		if cm.Name == component {
+			return c.Home + "/" + c.model.WorkflowFor(cm).Slug, nil
+		}
 	}
-	return c.Home + "/" + component + "-workflow", nil
+	return "", fmt.Errorf("no component %q", component)
 }
 
 // Vars is the play-scoped state primitives export for later steps: after

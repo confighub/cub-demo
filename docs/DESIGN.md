@@ -108,14 +108,18 @@ having unreleased changes.
 graph; `cub variant promote`'s `healthy` prerequisite requires `Synced`, `Succeeded` and
 `Healthy`, and `released` requires a Release published after the promotion.
 
-**Change workflows today.** The definition is a KRM unit (`confighub.com/v1 ChangeWorkflow`,
-toolchain `AppConfig/YAML`) with `spec.source.space` naming the tree root and
-`spec.stages[]{name, whereSpace, prerequisites}`; a ChangeOrder is created in the source Space
-with `--change-workflow`; `cub variant promote --change-order --target-stage` promotes a stage by
-looping its Spaces client-side in unspecified order, and a base Space (no `ReleaseTargetID`)
-can never satisfy `released`/`healthy`. Consequently a stage cannot currently contain a class
-base and the deployments cloned from it. The intended product behaviour is that it should; the
-specification is open (`docs/design/change-workflows.md` in the product repo).
+**Change workflows today (v0.4.15+).** The definition is a first-class ChangeWorkflow entity —
+`Stages[]{Name, WhereSpace, Prerequisites}` plus `Final` — that names no component and no base
+Space: a ChangeOrder binds one at creation (`cub changeorder create --change-workflow`), and
+the change order's own Space supplies both, the server narrowing every stage selector by that
+component (stage selectors must not name `Labels.Component` themselves). One workflow
+therefore governs many components' rollouts — but only components of the same rollout
+*shape*: promotion past a stage that selects no space is refused, so the tool creates one
+shared workflow per distinct class coverage (`standard-rollout` for full coverage, which most
+components share; e.g. `rollout-uat-prod` for a component placed on uat and prod only). `cub variant promote --change-order --target-stage` promotes
+stage by stage, and a base Space (no `ReleaseTargetID`) can never satisfy
+`released`/`healthy`, so a stage cannot currently contain a class base and the deployments
+cloned from it — the bases-first shape below is the consequence.
 
 **Plugin protocol.** Plugins live in `~/.confighub/plugins/<name>/` with a `cub-plugin.yaml`
 that `plugin.HandleHook` writes at install time. `cub plugin install confighub/cub-demo` strips
@@ -134,7 +138,7 @@ Concretely: `plays:` in the scenario maps names to step sequences, run with `cub
 `observe` (write a live-status observation by selector, optionally only where a release is
 newer than the last observation), `invoke` (one ConfigHub function against one unit),
 `bump-image` (read the base's current tag, bump it, write it back; exports `.Version` to the
-steps after it), `changeorder` (create one under the component's workflow). Strings are
+steps after it), `changeorder` (create one bound to the component's shared workflow). Strings are
 templates over the scenario plus the exported variables. So the workflows scenario's "ship"
 and "argobot-test" are its own vocabulary; the tool never had to hear of either.
 
@@ -177,7 +181,10 @@ org-wide `where` the tool issues includes that label, so nothing outside the dem
 6. **status** — the healthy live-status annotation in bulk per (component, class), then the
    story's Degraded / OutOfSync / Progressing exceptions individually.
 7. **views** — org-wide Filters and Views in the home Space.
-8. **workflows and stories** — workflow units and in-flight ChangeOrders (roadmap milestone 6).
+8. **workflows and stories** — the shared ChangeWorkflow entities (one per distinct class
+   coverage) and the in-flight ChangeOrders bound to them; legacy per-component workflow
+   entities and pre-entity workflow units converge away (kept only while a change order
+   still moves under one).
 
 **Slugs are org-global and scenarios must not collide.** The seeder refuses to adopt a space
 whose `DemoName` label names another owner (or none), so a colliding scenario fails loudly

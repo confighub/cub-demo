@@ -224,7 +224,7 @@ func stepChangeOrder(p *Presenter, vars map[string]string, with params) error {
 		}
 	}
 	return p.runCub([]string{"changeorder", "create", "--space", cm.RootSpace, slug,
-		"--description", desc, "--change-workflow", p.Model.Home + "/" + cm.Name + "-workflow"})
+		"--description", desc, "--change-workflow", p.Model.Home + "/" + p.Model.WorkflowFor(cm).Slug})
 }
 
 // runCub prints and runs one cub command, honoring dry-run.

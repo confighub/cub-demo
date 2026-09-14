@@ -114,8 +114,14 @@ story:
        args: [api, ":v3.8.1"], where: {regions: [ap-northeast], classes: [prod]}}
 ```
 
-**Workflows.** The tool generates one ChangeWorkflow per component in the bases-first shape:
-a single `bases` stage holding every class base, then one stage per class's deployments.
+**Workflows.** A ChangeWorkflow names no component: each change order binds one at creation,
+and the change order's own space supplies the component its stage selectors are narrowed by,
+so one definition governs every component that rolls out the same way. The tool generates
+one shared entity per distinct rollout shape, in the home space: components placed on every
+class share `standard-rollout`, and a component placed on fewer classes gets a workflow
+whose stages are exactly its classes (e.g. `rollout-uat-prod`) — the server refuses to
+promote past a stage that selects no space, so shapes cannot be mixed. All are bases-first:
+a `bases` stage holding the covered class bases, then one stage per class's deployments.
 `prerequisites` sets the gates per deployment stage (keys are class names plus `final`;
 values from `released`, `healthy`); absent keys default to `[released, healthy]`. The first
 class must stay gate-free — its previous stage holds only bases, which release nothing and
@@ -186,7 +192,7 @@ Three different places take Go templates, with three different contexts:
 |---|---|
 | Manifest files | `.Scenario` (Name, Company, Domain, Cloud, the dimension lists), `.Component` (the component name), `.Values` (component.yaml values). External-resource templates additionally get `.Name` (the external's name). |
 | Function `args` in component.yaml | `.Scenario`, `.Class`, `.Region`, `.Cluster` (Name, Region, ProviderRegion, Class, Department, Index, KubernetesVersion, NodeCount) — whichever the list is keyed by is populated. |
-| Play steps | `.Scenario`, `.Home` (the `<name>-platform` space), `.Context`, `.Base "component"` (its root-base space), `.Workflow "component"` (home/slug of its workflow), plus variables earlier steps exported: `.Version`, `.PreviousVersion`, `.Var "name"`. |
+| Play steps | `.Scenario`, `.Home` (the `<name>-platform` space), `.Context`, `.Base "component"` (its root-base space), `.Workflow "component"` (home/slug of the shared workflow its change orders bind), plus variables earlier steps exported: `.Version`, `.PreviousVersion`, `.Var "name"`. |
 
 And again: the manifest files must stay valid YAML with the templates in place — quote
 expressions that begin a scalar or key.
@@ -224,9 +230,10 @@ The primitives, with their `with:` parameters (unknown keys are rejected, naming
 - **`bump-image`** — read the component's current image tag (from its `release:` block),
   bump it (`strategy: major|minor|patch`, or explicit `version`), write it back with
   `change-desc`. Exports `.Version` and `.PreviousVersion` for later steps.
-- **`changeorder`** — create a change order in the component's base under its generated
-  workflow: `component`, `slug` (defaults to `<component>-<version>` from an earlier
-  bump-image), `description`. Refuses a slug that already exists.
+- **`changeorder`** — create a change order in the component's base, bound to the shared
+  workflow matching its class coverage: `component`, `slug` (defaults to
+  `<component>-<version>` from an earlier bump-image), `description`. Refuses a slug that
+  already exists.
 
 Write plays so they run twice without a teardown: derive slugs from bumped versions rather
 than hard-coding them, and let `observe` defaults heal what an incident play painted.

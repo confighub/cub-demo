@@ -157,7 +157,7 @@ func TestPlayContextTemplates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "--space catalog-api-base --change-workflow " + m.Home + "/catalog-api-workflow"
+	want := "--space catalog-api-base --change-workflow " + m.Home + "/" + scenario.StandardWorkflowSlug
 	if got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}

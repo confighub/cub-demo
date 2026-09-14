@@ -14,8 +14,8 @@ import (
 )
 
 // stories seeds the in-flight change orders: make the change in the root
-// base, create the change order under the component's workflow, then walk it
-// stage by stage to landedThrough — releasing and reporting healthy after
+// base, create the change order under the shared workflow matching the
+// component's class coverage, then walk it stage by stage to landedThrough — releasing and reporting healthy after
 // each deployment stage so the next stage's gates hold. Every step is
 // idempotent: re-applying the change alters no data, an existing change order
 // is reused, an already-promoted stage selects nothing, and re-releases skip.
@@ -74,17 +74,31 @@ func (s *Seeder) story(cm *scenario.ComponentModel, co scenario.ChangeOrder) err
 	case existing == nil:
 		_, err := cubexec.Run("changeorder", "create", "--space", cm.RootSpace, co.Slug,
 			"--description", co.Description,
-			"--change-workflow", s.Model.Home+"/"+workflowSlug(cm))
+			"--change-workflow", s.Model.Home+"/"+s.Model.WorkflowFor(cm).Slug)
 		if err != nil {
 			return err
 		}
 		fmt.Fprintf(s.Out, "  created change order %s\n", coRef)
 	}
 
-	// Walk the stages in order through landedThrough. Promotion is cub's own
-	// logic; after each deployment stage the promoted spaces are released and
+	// Walk the stages in order through landedThrough. The bound workflow's
+	// stages are exactly the component's classes (the workflow matches its
+	// coverage), so every stage selects spaces. Promotion is cub's own logic;
+	// after each deployment stage the promoted spaces are released and
 	// reported healthy, which is exactly what the next stage's gates read.
-	for _, st := range s.Model.WorkflowStages(cm) {
+	def := s.Model.WorkflowFor(cm)
+	if co.LandedThrough != "bases" {
+		found := false
+		for _, cl := range def.Classes {
+			if cl.Name == co.LandedThrough {
+				found = true
+			}
+		}
+		if !found {
+			return fmt.Errorf("landedThrough %q: %s has no %s class base", co.LandedThrough, cm.Name, co.LandedThrough)
+		}
+	}
+	for _, st := range s.Model.WorkflowStages(def) {
 		if _, err := cubexec.Run("variant", "promote", "--change-order", coRef, "--target-stage", st.Name); err != nil {
 			return fmt.Errorf("promote stage %s: %w", st.Name, err)
 		}

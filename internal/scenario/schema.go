@@ -190,12 +190,14 @@ type Skew struct {
 	Where     Selector `yaml:"where"`
 }
 
-// Workflows is the change-workflow part of a scenario. The tool generates one
-// ChangeWorkflow definition per component in the bases-first shape — a single
-// "bases" stage carrying every class base, then one stage per class's
-// deployments, gated released+healthy on the class before it. The product
-// intends a stage to span hierarchy levels eventually; until that is
-// specified, bases-first is the shape that works and reads honestly
+// Workflows is the change-workflow part of a scenario. The tool generates
+// shared ChangeWorkflow definitions in the home space, one per distinct
+// class coverage ("standard-rollout" for full coverage), in the bases-first
+// shape — a "bases" stage carrying the covered class bases, then one stage
+// per class's deployments, gated released+healthy on the class before it. A
+// workflow names no component: change orders bind one at creation, and the
+// change order's space supplies the component every stage selector is
+// narrowed by, so one definition governs every same-shaped component
 // (docs/DESIGN.md).
 type Workflows struct {
 	// Disabled skips workflow and change-order seeding entirely.

@@ -61,11 +61,13 @@ Deployment Spaces carry `confighub.com/live-status`:
 The story scatters a small, deterministic set of `Degraded`, `OutOfSync` and `Progressing`
 exceptions, and leaves a small set of deployments with unreleased changes.
 
-## Change workflows (milestone 6)
+## Change workflows
 
-One `ChangeWorkflow` unit per component, in the home Space, rendered from the scenario's
-workflow template; ChangeOrders are created in the component's root base. The stage shape is
-deliberately not fixed here — see the decision in `DESIGN.md`.
+Shared `ChangeWorkflow` entities in the home Space, one per distinct class coverage —
+`standard-rollout` for components placed on every class, `rollout-<classes>` otherwise. A
+workflow names no component: ChangeOrders are created in a component's root base with
+`--change-workflow`, binding one at creation, and the change order's Space supplies the
+component every stage selector is narrowed by. Stage shape in `DESIGN.md`.
 
 ## Selectors worth knowing
 

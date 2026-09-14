@@ -21,8 +21,8 @@ installed. If the plugin was upgraded across a scenario-schema change the verbs 
 for `cub demo install workflows` to refresh the stored definition.
 
 **Opening state.** Six clusters (`us-east-dev1`, `us-east-test1/2`, `us-east-prod1/2/3`),
-three components, three ChangeWorkflow entities in `workflows-platform` (`cub changeworkflow
-list --space workflows-platform`). catalog-api runs 5.2.0 everywhere, has no change order and no live status;
+three components sharing one ChangeWorkflow entity, `standard-rollout` in `workflows-platform`
+(`cub changeworkflow list --space workflows-platform`). catalog-api runs 5.2.0 everywhere, has no change order and no live status;
 its memory limit is 512Mi everywhere except `us-east-prod1`, which carries 2Gi and protects it. cert-manager has
 `cert-manager-1-17-0` landed through test with `us-east-test1` Degraded (chapter 2). Workflow
 stages: `bases → dev → test (released) → prod (released, healthy)`, `final: released, healthy`.

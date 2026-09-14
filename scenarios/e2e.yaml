@@ -29,7 +29,9 @@ clusters:
 
 catalog:
   - {name: e2e-cert-manager, owner: platform-team, dir: catalog/cert-manager}
-  - {name: e2e-traefik,      owner: platform-team, dir: catalog/traefik}
+  # prod-only placement, so the shared workflow's dev stage is empty for this
+  # component: its change order below exercises the stage-skip path.
+  - {name: e2e-traefik,      owner: platform-team, dir: catalog/traefik, placement: [{classes: [prod]}]}
 
 workloads:
   - name: e2e-storefront
@@ -50,6 +52,8 @@ workflows:
   changeOrders:
     - {component: e2e-cert-manager, slug: e2e-cm-bump, description: "e2e: bump cert-manager",
        unit: controller, function: set-image-reference, args: [cert-manager-controller, ":v1.16.9"], landedThrough: dev}
+    - {component: e2e-traefik, slug: e2e-traefik-bump, description: "e2e: bump traefik",
+       unit: controller, function: set-image-reference, args: [traefik, ":v3.3.9"], landedThrough: prod}
 
 story:
   seed: 7

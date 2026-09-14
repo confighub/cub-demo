@@ -2,6 +2,7 @@ package seed
 
 import (
 	"fmt"
+	"strings"
 
 	goclient "github.com/confighub/sdk/core/openapi/goclient-new"
 )
@@ -50,7 +51,16 @@ func (s *Seeder) Teardown(force, keepDefinition bool) error {
 			continue
 		}
 		err := forEach(s, batch, func(sp *goclient.Space) error {
-			if err := s.Client.DeleteSpace(sp.SpaceID, force); err != nil {
+			err := s.Client.DeleteSpace(sp.SpaceID, force)
+			// Change-order start/end tags gate deletion (server behavior since
+			// 2026-09; any story-seeded base trips it). The tags are the
+			// demo's own, so this one gate is passed with force rather than
+			// making every teardown of a scenario with stories a two-step.
+			if err != nil && !force && strings.Contains(err.Error(), "revisions tagged") {
+				fmt.Fprintf(s.Out, "  %s: revisions tagged by the demo's change orders; deleting with force\n", sp.Slug)
+				err = s.Client.DeleteSpace(sp.SpaceID, true)
+			}
+			if err != nil {
 				return fmt.Errorf("delete %s: %w", sp.Slug, err)
 			}
 			return nil

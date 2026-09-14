@@ -10,9 +10,9 @@ dev, two test, three prod), and a workload called **catalog-api** that runs on a
 change workflow has four stages, `bases → dev → test → prod`, then a final check. Test may only
 take a change that dev has *released*; prod may only take a change that test has released *and*
 that is *healthy* there. That is the whole policy, and it is one ChangeWorkflow:
-`cub changeworkflow get catalog-api-workflow --space workflows-platform` shows the four stages,
+`cub changeworkflow get standard-rollout --space workflows-platform` shows the four stages,
 each a selector over spaces with the component left out on purpose — the change order supplies
-it, so one workflow shape serves every component that rolls out the same way.
+it at creation, so this one workflow governs every component's rollouts.
 
 > **Presenter.** Setup, reset and the CLI form of every beat are in the appendix,
 > [change-workflows-demo.md](change-workflows-demo.md). Spots marked `▶` are where you run
@@ -41,7 +41,7 @@ catalog-api runs 5.2.0; shipping 5.3.0
       -- set-string-path apps/v1/Deployment spec.template.spec.containers.0.resources.limits.memory 1Gi
 ▶ changeorder
 ▶ cub changeorder create --space catalog-api-base catalog-api-5-3-0 --description "catalog-api 5.3.0" \
-      --change-workflow workflows-platform/catalog-api-workflow
+      --change-workflow workflows-platform/standard-rollout
 ```
 
 The first two commands are ordinary edits: two revisions on the base's `api` unit, each with the

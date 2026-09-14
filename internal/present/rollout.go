@@ -116,7 +116,7 @@ func (p *Presenter) FindRollout(component, ref string) (*Rollout, error) {
 	open := pickOpen(all)
 	switch len(open) {
 	case 0:
-		return nil, fmt.Errorf("%s has no change order in flight (run 'cub demo ci %s' to start one)", component, component)
+		return nil, fmt.Errorf("%s has no change order in flight (a play with a changeorder step starts one)", component)
 	case 1:
 		return &Rollout{ChangeOrder: open[0], Space: sp, Component: sp.Labels["Component"]}, nil
 	}
