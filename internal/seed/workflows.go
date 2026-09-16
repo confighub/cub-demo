@@ -118,12 +118,26 @@ func (s *Seeder) retireStaleWorkflows(defs []scenario.WorkflowDef) error {
 		// failure matters, and the ensure step surfaces those.
 		return nil
 	}
-	var listed []struct {
+	// Each list element wraps the entity ({"ChangeWorkflow": {...}}); accept
+	// the flat shape too.
+	type wfFields struct {
 		Slug   string            `json:"Slug"`
 		Labels map[string]string `json:"Labels"`
 	}
-	if jerr := json.Unmarshal([]byte(raw), &listed); jerr != nil {
+	var wrapped []struct {
+		ChangeWorkflow wfFields `json:"ChangeWorkflow"`
+		wfFields
+	}
+	if jerr := json.Unmarshal([]byte(raw), &wrapped); jerr != nil {
 		return nil
+	}
+	listed := make([]wfFields, 0, len(wrapped))
+	for _, w := range wrapped {
+		if w.ChangeWorkflow.Slug != "" {
+			listed = append(listed, w.ChangeWorkflow)
+		} else {
+			listed = append(listed, w.wfFields)
+		}
 	}
 	wanted := map[string]bool{}
 	for _, def := range defs {
