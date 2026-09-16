@@ -45,9 +45,10 @@ func (m *Model) workflowDefFor(classes []Class) WorkflowDef {
 	for _, cl := range classes {
 		names = append(names, cl.Name)
 	}
+	// The server's DisplayName regex takes no commas; spaces are fine.
 	return WorkflowDef{
 		Slug:    "rollout-" + strings.Join(names, "-"),
-		Display: "Rollout via " + strings.Join(names, ", "),
+		Display: "Rollout via " + strings.Join(names, " "),
 		Classes: classes,
 	}
 }
