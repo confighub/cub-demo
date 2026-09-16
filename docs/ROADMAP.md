@@ -44,6 +44,11 @@ A fictional global retail / payments / logistics group, all on AWS.
 
 ## Follow-ups
 
+- A presenter cheat-sheet verb (working name `cub demo brief`): read-only summary of the
+  living org's narrative state — which rollouts are in flight and what their next gate waits
+  on, which spaces are degraded — so a presenter can walk up to an org another demo moved
+  and know where the stories stand. The full-scale demo script for meridian gets rewritten
+  against the play model alongside it.
 - `cub resource list --view` does not apply the view's attached Filter and leaves
   `Space.Labels.*` metadata columns blank; the Resource table also serves duplicate rows (a
   stale blank twin per resource) — raised 2026-09-02, issues pending.
