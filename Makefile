@@ -68,13 +68,13 @@ run: ## Run cub-demo directly (pass args via ARGS="...")
 
 # Installs through cub's own local-path install rather than by dropping a binary
 # into the plugin directory, so local development exercises the same code a
-# release does — including the install hook that writes cub-plugin.yaml.
+# release does — including the install hook that writes cub-plugin.yaml. Always
+# uninstall first: "cub plugin upgrade" follows the plugin's recorded source,
+# which for a release-installed plugin is GitHub — it would silently fetch the
+# release instead of installing this build.
 plugin: build ## Install this build into cub as the "demo" plugin
-	@if $(CUB) plugin list 2>/dev/null | grep -q '^demo[[:space:]]'; then \
-		$(CUB) plugin upgrade demo; \
-	else \
-		$(CUB) plugin install ./$(BIN_DIR)/$(BINARY); \
-	fi
+	@$(CUB) plugin uninstall demo >/dev/null 2>&1 || true
+	$(CUB) plugin install ./$(BIN_DIR)/$(BINARY)
 	@echo "run 'cub demo version'"
 
 plugin-uninstall: ## Remove the plugin from cub
