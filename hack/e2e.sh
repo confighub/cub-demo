@@ -25,6 +25,10 @@ grep -q "Everything the implemented phases create exists." <<<"$out" || fail "st
 # the pipe early, which pipefail would turn into a false failure.)
 out=$($demo up --demo e2e)
 grep -q "(0 created or completed)" <<<"$out" || fail "second up was not a no-op"
+out=$($demo play --demo e2e)
+grep -q "ship" <<<"$out" || fail "play listing lacks ship"
+out=$($demo play ship --demo e2e --dry-run)
+grep -q "changeorder create" <<<"$out" || fail "play dry-run did not render the changeorder step"
 $demo down --demo e2e --yes
 # down keeps the installed definition; only the e2e-scenario space remains
 n=$(cub space list --where "Labels.DemoName = 'e2e'" --no-headers | wc -l | tr -d ' ')

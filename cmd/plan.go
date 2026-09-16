@@ -143,7 +143,7 @@ func installedBundle() (*scenario.Bundle, error) {
 		// A schema the stored bundle predates parses with unknown fields, and
 		// every future schema change would hit this; fail with the way out
 		// rather than a bare parse error.
-		return nil, fmt.Errorf("%w\nThe org's stored scenario was installed by an older cub-demo; refresh it with: cub demo install %s", err, name)
+		return nil, fmt.Errorf("%w\nThe org's stored scenario was installed by an older cub-demo; re-install %s (cub demo install <its embedded name or scenario file>) to refresh it", err, name)
 	}
 	return b, nil
 }

@@ -158,7 +158,7 @@ catalog: [{name: cert-manager, dir: catalog/cert-manager, typo: 1}]
 
 // A bundle stored in the org (Bundle.Files) must load back to the same model.
 func TestLoadFromFilesRoundTrip(t *testing.T) {
-	b, err := Load(os.DirFS(".."+string(os.PathSeparator)+".."), "workflows")
+	b, err := Load(os.DirFS(".."+string(os.PathSeparator)+".."), "e2e")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestLoadFromFilesRoundTrip(t *testing.T) {
 	for _, f := range files {
 		byPath[f.Path] = f.Data
 	}
-	again, err := LoadFromFiles("workflows", byPath)
+	again, err := LoadFromFiles("e2e", byPath)
 	if err != nil {
 		t.Fatal(err)
 	}

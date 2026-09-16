@@ -15,7 +15,7 @@ whoever picks the work up next.
 | 6 | Workflows and ChangeOrder stories | rollouts in flight, one blocked. **Gated on the product specifying multi-level stages**; until then the scenario's per-level workflow template is marked temporary | 4, product | blocked |
 | 7 | README tour, CI, repo + install path | clonable; installable via `make plugin`, later `cub plugin install confighub/cub-demo` | 4 | **done** 2026-08-31 — started as an internal repo with path-based install; moved to confighub/cub-demo with release-based install 2026-09-14 |
 
-| 8 | Multi-demo support: per-scenario context pin, configurable stage prerequisites, provenance (scenario bundle stored in the target org), `cub demo list`; the `workflows` scenario (6 clusters, 3 components, per-stage gates differing) for demoing change workflows in the `demo` org | two demos in two orgs without footguns; every org self-describing | 7 | **done** 2026-09-01 |
+| 8 | Multi-demo support: per-scenario context pin, configurable stage prerequisites, provenance (scenario bundle stored in the target org), `cub demo list`; the `workflows` scenario (6 clusters, 3 components, per-stage gates differing) for demoing change workflows in the `demo` org | two demos in two orgs without footguns; every org self-describing | 7 | **done** 2026-09-01 — the workflows scenario moved out of the repo 2026-09-16 (demo content, maintained with the demo; installed by path) |
 
 Milestones 5 and 6 are independent of each other.
 

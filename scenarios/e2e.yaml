@@ -55,6 +55,35 @@ workflows:
     - {component: e2e-traefik, slug: e2e-traefik-bump, description: "e2e: bump traefik",
        unit: controller, function: set-image-reference, args: [traefik, ":v3.3.9"], landedThrough: prod}
 
+# Plays exercise every primitive; the unit tests render them and hack/e2e.sh
+# dry-runs one, so play coverage lives on this scenario.
+plays:
+  ship:
+    - call: bump-image
+      with: {component: e2e-catalog-api, strategy: patch}
+    - call: invoke
+      with:
+        space: '{{.Base "e2e-catalog-api"}}'
+        unit: api
+        function: set-string-path
+        args: [apps/v1/Deployment, spec.template.spec.containers.0.resources.limits.memory, 1Gi]
+        change-desc: 'e2e-catalog-api {{.Version}}: memory limit 1Gi'
+    - call: changeorder
+      with: {component: e2e-catalog-api, description: 'e2e-catalog-api {{.Version}}'}
+  argobot:
+    - call: observe
+      with: {component: e2e-catalog-api, when: release-newer}
+  incident:
+    - call: observe
+      with:
+        component: e2e-storefront
+        variants: [e2e-east-dev1]
+        health: Degraded
+        message: 'e2e: rollout stalled, 1 pod CrashLoopBackOff'
+  heal:
+    - call: observe
+      with: {component: e2e-storefront, variants: [e2e-east-dev1]}
+
 story:
   seed: 7
   liveStatus: {degradedPercent: 10, outOfSyncPercent: 0, progressingPercent: 0}

@@ -139,8 +139,11 @@ Concretely: `plays:` in the scenario maps names to step sequences, run with `cub
 newer than the last observation), `invoke` (one ConfigHub function against one unit),
 `bump-image` (read the base's current tag, bump it, write it back; exports `.Version` to the
 steps after it), `changeorder` (create one bound to the component's shared workflow). Strings are
-templates over the scenario plus the exported variables. So the workflows scenario's "ship"
-and "argobot-test" are its own vocabulary; the tool never had to hear of either.
+templates over the scenario plus the exported variables. So a scenario's "ship" and
+"argobot" are its own vocabulary; the tool never had to hear of either. This is also what
+lets demo content live outside this repo entirely: the internal change-workflows demo is one
+scenario file maintained elsewhere and installed by path, riding the embedded component
+directories.
 
 ## Multiple demos
 
@@ -158,7 +161,7 @@ self-describing:
 - **`cub demo list`** groups the org's spaces by DemoName: which demos live here, how big.
 
 Per-stage workflow gates are configurable per scenario (`workflows.prerequisites`); the
-`workflows` scenario uses this to make the gates themselves the demo.
+internal change-workflows demo uses this to make the gates themselves the demo.
 
 ## The pipeline
 

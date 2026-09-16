@@ -5,16 +5,16 @@ company and its fleet, plus a `manifests/` tree holding each component's `compon
 Kubernetes manifests. `cub demo install` stores the definition in an org; `cub demo up`
 converges the org to it. This document is the authoring reference: the schema is defined (and
 further documented) in `internal/scenario/schema.go`, and the embedded scenarios under
-`scenarios/` are worked examples — `workflows` (6 clusters, 3 components) is the best first
-read, `meridian` (99 clusters, 19 components) the full-scale one.
+`scenarios/` are worked examples — `e2e` (10 clusters, 4 components, with plays) is the best
+first read, `meridian` (99 clusters, 19 components) the full-scale one.
 
 ## Start from an export
 
 ```
-cub demo scenario export workflows ./myco
-# edit ./myco/workflows.yaml and ./myco/manifests/...
-cub demo plan ./myco/workflows.yaml       # offline: what it expands to
-cub demo install ./myco/workflows.yaml    # store the definition in the active org
+cub demo scenario export e2e ./myco
+# edit ./myco/e2e.yaml and ./myco/manifests/...
+cub demo plan ./myco/e2e.yaml             # offline: what it expands to
+cub demo install ./myco/e2e.yaml          # store the definition in the active org
 cub demo up                               # create the dataset
 ```
 
@@ -100,7 +100,7 @@ workloads:
 A placement rule selects clusters by the intersection of its non-empty fields (`classes`,
 `regions`, `departments`, `maxIndex`); `exclude` removes matches; the component lands on the
 union of all rules. `liveStatus: none` leaves a component's deployments unpainted so a
-workflow's healthy gate is only ever opened by a play (the `workflows` scenario uses this).
+workflow's healthy gate is only ever opened by a play.
 
 **Story** is the deliberate imperfection, deterministic from `seed`:
 

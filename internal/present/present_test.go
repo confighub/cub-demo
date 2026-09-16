@@ -73,10 +73,10 @@ func TestParseProtections(t *testing.T) {
 	}
 }
 
-// The embedded workflows scenario is the one chapter 1 runs on; its moves must
-// render, and the chapter's premises must hold in the file.
-func TestWorkflowsScenarioMoves(t *testing.T) {
-	b, err := scenario.Load(os.DirFS("../.."), "workflows")
+// The e2e scenario carries the play coverage: every primitive appears in a
+// play, each play renders, and unknown names fail.
+func TestE2EScenarioPlays(t *testing.T) {
+	b, err := scenario.Load(os.DirFS("../.."), "e2e")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestWorkflowsScenarioMoves(t *testing.T) {
 	}
 	p := &Presenter{Model: m}
 	names := p.Plays()
-	for _, want := range []string{"ship", "argobot-test", "argobot-prod", "oom-incident", "heal-test1"} {
+	for _, want := range []string{"ship", "argobot", "incident", "heal"} {
 		found := false
 		for _, n := range names {
 			if n == want {
@@ -94,9 +94,10 @@ func TestWorkflowsScenarioMoves(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("workflows scenario lacks play %q (have %v)", want, names)
+			t.Errorf("e2e scenario lacks play %q (have %v)", want, names)
 		}
 	}
+	called := map[string]bool{}
 	for _, n := range names {
 		if _, err := p.Describe(n); err != nil {
 			t.Errorf("describe %s: %v", n, err)
@@ -108,42 +109,21 @@ func TestWorkflowsScenarioMoves(t *testing.T) {
 			if _, ok := primitives[st.Call]; !ok {
 				t.Errorf("play %s calls unknown primitive %q", n, st.Call)
 			}
+			called[st.Call] = true
+		}
+	}
+	for prim := range primitives {
+		if !called[prim] {
+			t.Errorf("no e2e play exercises primitive %q", prim)
 		}
 	}
 	if _, err := p.Describe("no-such-move"); err == nil {
 		t.Error("unknown play should fail")
 	}
-
-	var catalog *scenario.ComponentModel
-	for _, cm := range m.Components {
-		if cm.Name == "catalog-api" {
-			catalog = cm
-		}
-	}
-	if catalog == nil {
-		t.Fatal("no catalog-api")
-	}
-	if catalog.LiveStatus != "none" {
-		t.Errorf("catalog-api liveStatus = %q, want none so the healthy gate waits for argobot", catalog.LiveStatus)
-	}
-	if catalog.Spec.Release == nil || catalog.Spec.Release.Unit != "api" {
-		t.Errorf("catalog-api release = %+v", catalog.Spec.Release)
-	}
-	if len(catalog.Spec.Protect["prod"]) == 0 || len(catalog.Spec.Protect["prod"][0].Variants) != 1 {
-		t.Errorf("catalog-api must protect exactly one prod variant, got %+v", catalog.Spec.Protect["prod"])
-	}
-	if len(catalog.Spec.Protect["test"]) != 0 {
-		t.Errorf("test must carry no protection: the test stage is about gates")
-	}
-	for _, co := range m.Scenario.Workflows.ChangeOrders {
-		if co.Component == "catalog-api" {
-			t.Errorf("catalog-api must seed clean; found change order %s", co.Slug)
-		}
-	}
 }
 
 func TestPlayContextTemplates(t *testing.T) {
-	b, err := scenario.Load(os.DirFS("../.."), "workflows")
+	b, err := scenario.Load(os.DirFS("../.."), "e2e")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,11 +133,11 @@ func TestPlayContextTemplates(t *testing.T) {
 	}
 	ctx := PlayContext{Scenario: m.Scenario, Home: m.Home, Context: m.Scenario.Context, model: m}
 
-	got, err := ctx.render(`--space {{.Base "catalog-api"}} --change-workflow {{.Workflow "catalog-api"}}`, nil)
+	got, err := ctx.render(`--space {{.Base "e2e-catalog-api"}} --change-workflow {{.Workflow "e2e-catalog-api"}}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "--space catalog-api-base --change-workflow " + m.Home + "/" + scenario.StandardWorkflowSlug
+	want := "--space e2e-catalog-api-base --change-workflow " + m.Home + "/" + scenario.StandardWorkflowSlug
 	if got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
@@ -166,8 +146,8 @@ func TestPlayContextTemplates(t *testing.T) {
 	}
 
 	// Variables exported by an earlier step resolve; unexported names fail.
-	got, err = ctx.render("catalog-api {{.Version}}", map[string]string{"Version": "5.4.0"})
-	if err != nil || got != "catalog-api 5.4.0" {
+	got, err = ctx.render("e2e-catalog-api {{.Version}}", map[string]string{"Version": "5.4.0"})
+	if err != nil || got != "e2e-catalog-api 5.4.0" {
 		t.Errorf("render with vars: %q, %v", got, err)
 	}
 	if _, err := ctx.render("{{.Version}}", nil); err == nil {
@@ -189,7 +169,7 @@ func TestParamsValidation(t *testing.T) {
 }
 
 func TestChangeOrderStepDerivesSlug(t *testing.T) {
-	b, err := scenario.Load(os.DirFS("../.."), "workflows")
+	b, err := scenario.Load(os.DirFS("../.."), "e2e")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,13 +180,13 @@ func TestChangeOrderStepDerivesSlug(t *testing.T) {
 	var out strings.Builder
 	p := &Presenter{Model: m, Out: &out, DryRun: true}
 	vars := map[string]string{"Version": "5.4.0"}
-	if err := stepChangeOrder(p, vars, params{"component": "catalog-api"}); err != nil {
+	if err := stepChangeOrder(p, vars, params{"component": "e2e-catalog-api"}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "catalog-api-5-4-0") {
+	if !strings.Contains(out.String(), "e2e-catalog-api-5-4-0") {
 		t.Errorf("derived slug missing from: %s", out.String())
 	}
-	if err := stepChangeOrder(p, map[string]string{}, params{"component": "catalog-api"}); err == nil {
+	if err := stepChangeOrder(p, map[string]string{}, params{"component": "e2e-catalog-api"}); err == nil {
 		t.Error("no slug and no Version should fail")
 	}
 }
