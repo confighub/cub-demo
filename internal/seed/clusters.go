@@ -9,7 +9,7 @@ import (
 	"github.com/confighub/cub-demo/internal/scenario"
 )
 
-// TargetSlug is the single OCI target inside each cluster space, matching the
+// TargetSlug is the single target inside each cluster space, matching the
 // "cub cluster up" convention of one target per cluster space.
 const TargetSlug = "cluster"
 
@@ -30,26 +30,12 @@ func clusterLabels(s *Seeder, c *scenario.Cluster) map[string]string {
 	return labels
 }
 
-// clusters creates one space and one OCI target per cluster. The target's
-// facts carry the cluster's properties, so the fleet is queryable by
-// Kubernetes version, cloud region, class and department.
+// clusters creates one space and one target per cluster. A Target names no
+// worker, so nothing stands behind it: it is where the cluster's deployment
+// spaces publish their Releases. Its facts carry the cluster's properties, so
+// the fleet is queryable by Kubernetes version, cloud region, class and
+// department.
 func (s *Seeder) clusters() error {
-	if s.workerID == uuidNil && !s.DryRun {
-		// The home phase was skipped; resolve the worker from the org.
-		home := s.space(s.Model.Home)
-		if home == nil {
-			return fmt.Errorf("home space %s does not exist; run the home phase first", s.Model.Home)
-		}
-		worker, err := s.Client.WorkerBySlug(home.SpaceID, WorkerSlug)
-		if err != nil {
-			return err
-		}
-		if worker == nil {
-			return fmt.Errorf("worker %s/%s does not exist; run the home phase first", s.Model.Home, WorkerSlug)
-		}
-		s.workerID = worker.BridgeWorkerID
-	}
-
 	created := 0
 	err := forEach(s, s.Model.Clusters, func(c *scenario.Cluster) error {
 		madeSpace, madeTarget, err := s.cluster(c)
@@ -77,7 +63,7 @@ func (s *Seeder) cluster(c *scenario.Cluster) (bool, bool, error) {
 	if !c.Shared() {
 		display = fmt.Sprintf("%s %s %s %s%d", s.Model.Scenario.Company, c.Region, c.Department, c.Class, c.Index)
 	}
-	sp, madeSpace, err := s.ensureSpace(c.Name, display, clusterLabels(s, c))
+	sp, madeSpace, err := s.ensureSpace(c.Name, display, clusterLabels(s, c), nil)
 	if err != nil {
 		return false, false, err
 	}
@@ -106,16 +92,12 @@ func (s *Seeder) cluster(c *scenario.Cluster) (bool, bool, error) {
 		facts["Cluster.Department"] = c.Department
 	}
 	_, err = s.Client.CreateTarget(sp.SpaceID, goclient.Target{
-		SpaceID:        sp.SpaceID,
-		Slug:           TargetSlug,
-		DisplayName:    c.Name,
-		BridgeWorkerID: s.workerID,
-		ProviderType:   "OCI",
-		ToolchainType:  "Any",
-		Parameters:     "{}",
-		Labels:         clusterLabels(s, c),
-		Facts:          facts,
-		WhereTrigger:   fmt.Sprintf("SpaceID = '%s'", sp.SpaceID),
+		SpaceID:      sp.SpaceID,
+		Slug:         TargetSlug,
+		DisplayName:  c.Name,
+		Labels:       clusterLabels(s, c),
+		Facts:        facts,
+		WhereTrigger: fmt.Sprintf("SpaceID = '%s'", sp.SpaceID),
 	})
 	if err != nil {
 		return madeSpace, false, err

@@ -219,12 +219,13 @@ plays:
 
 The primitives, with their `with:` parameters (unknown keys are rejected, naming the typo):
 
-- **`observe`** — write a live-status observation on selected deployment spaces. Selectors:
-  `component`, `variants` (cluster names), `stage` (+ `changeorder` as `space/slug` when the
-  component has several in flight). `when: release-newer` observes only spaces whose release
-  is newer than their last observation and reports them Synced/Healthy — a delivery bot
-  (`force` re-reports regardless). `health: Degraded|OutOfSync|Progressing` with `message`
-  paints an incident; no `when`/`health` means heal: repaint the selection healthy.
+- **`observe`** — report live status on the latest Release of selected deployment spaces.
+  Selectors: `component`, `variants` (cluster names), `stage` (+ `changeorder` as `space/slug`
+  when the component has several in flight). `when: release-newer` reports Synced/Healthy
+  only on spaces whose latest Release nothing has reported on yet — a delivery bot (`force`
+  re-reports regardless). `health: Degraded|OutOfSync|Progressing` with `message` reports an
+  incident; no `when`/`health` means heal: report the selection healthy. Status is a
+  Release's, so a space with no release is named and skipped.
 - **`invoke`** — run one ConfigHub function against one unit: `space`, `unit`, `function`,
   `args`, `change-desc`. The generic change-making move.
 - **`bump-image`** — read the component's current image tag (from its `release:` block),

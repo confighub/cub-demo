@@ -18,8 +18,8 @@ func newDownCmd() *cobra.Command {
 		Use:   "down",
 		Short: "Delete the dataset the scenario created in the active org",
 		Long: `Delete every space labelled with the scenario's DemoName, recursively (units,
-links, releases, targets and the worker go with their spaces). Only entities
-carrying the label are touched. The installed definition (the <name>-scenario
+links, releases and targets go with their spaces), and the Component entities
+carrying the same label. Only entities carrying the label are touched. The installed definition (the <name>-scenario
 space) is kept, so "cub demo up" can re-create the dataset; "cub demo
 uninstall" removes the definition too.`,
 		Args:              cobra.NoArgs,

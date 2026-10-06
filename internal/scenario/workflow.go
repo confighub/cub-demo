@@ -110,9 +110,9 @@ func (m *Model) WorkflowStages(def WorkflowDef) []WorkflowStage {
 	for _, cl := range def.Classes {
 		classes = append(classes, "'"+cl.Name+"'")
 	}
-	// The component predicate is deliberately absent: since v0.4.6 (Q26) the
-	// server appends the change order's own component to every stage selector
-	// and refuses definitions that name it themselves.
+	// The component predicate is deliberately absent: the server narrows
+	// every stage selector by the change order's own Component and refuses
+	// definitions that name it themselves.
 	stages := []WorkflowStage{{
 		Name: "bases",
 		WhereSpace: fmt.Sprintf("Labels.DemoName = '%s' AND Labels.Role = 'base' AND Labels.Variant IN (%s)",
@@ -159,9 +159,8 @@ func CanonicalPrerequisite(r string) string {
 	return r
 }
 
-// WorkflowEntity is the shared ChangeWorkflow entity body, in the shape
-// `cub changeworkflow create/update --from-stdin` reads (v0.4.15+: the
-// workflow is a first-class entity, not a KRM unit).
+// WorkflowEntity is the part of a shared ChangeWorkflow entity a scenario
+// defines, in the entity's own JSON field names.
 type WorkflowEntity struct {
 	DisplayName string                `json:"DisplayName,omitempty"`
 	Stages      []WorkflowEntityStage `json:"Stages"`

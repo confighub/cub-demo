@@ -4,34 +4,15 @@ import (
 	"fmt"
 	"strings"
 
-	"encoding/json"
 	goclient "github.com/confighub/sdk/core/openapi/goclient-new"
 	"github.com/google/uuid"
-
-	"github.com/confighub/cub-demo/internal/cubexec"
 )
 
-// Rollout is a change order together with what a stage needs to be resolved
-// through it: the component (its space's label) and the workflow it names.
+// Rollout is a change order together with the space it lives in, whose
+// Component is the one every stage of its workflow is narrowed by.
 type Rollout struct {
 	ChangeOrder *goclient.ChangeOrder
 	Space       *goclient.Space // the change order's own space, the base
-	Component   string
-}
-
-// Workflow is the part of a ChangeWorkflow entity a stage lookup reads
-// (v0.4.15+: workflows are entities, resolved from the change order's
-// ChangeWorkflowID rather than a unit annotation).
-type Workflow struct {
-	Slug   string          `json:"Slug"`
-	Stages []WorkflowStage `json:"Stages"`
-}
-
-// WorkflowStage is one stage: its name and the selector over spaces.
-type WorkflowStage struct {
-	Name          string   `json:"Name"`
-	WhereSpace    string   `json:"WhereSpace"`
-	Prerequisites []string `json:"Prerequisites"`
 }
 
 // terminal is the states a change order does not come back from. Released is
@@ -93,7 +74,7 @@ func (p *Presenter) FindRollout(component, ref string) (*Rollout, error) {
 		if co == nil {
 			return nil, fmt.Errorf("change order %s not found", ref)
 		}
-		return &Rollout{ChangeOrder: co, Space: sp, Component: sp.Labels["Component"]}, nil
+		return &Rollout{ChangeOrder: co, Space: sp}, nil
 	}
 	if component == "" {
 		return nil, fmt.Errorf("a stage is a workflow fact: name --component (its change order in flight is used) or --change-order space/slug")
@@ -118,7 +99,7 @@ func (p *Presenter) FindRollout(component, ref string) (*Rollout, error) {
 	case 0:
 		return nil, fmt.Errorf("%s has no change order in flight (a play with a changeorder step starts one)", component)
 	case 1:
-		return &Rollout{ChangeOrder: open[0], Space: sp, Component: sp.Labels["Component"]}, nil
+		return &Rollout{ChangeOrder: open[0], Space: sp}, nil
 	}
 	names := make([]string, 0, len(open))
 	for _, co := range open {
@@ -135,7 +116,7 @@ func (p *Presenter) StageSpaces(r *Rollout, stage string) (map[uuid.UUID]bool, e
 	if err != nil {
 		return nil, err
 	}
-	var st *WorkflowStage
+	var st *goclient.ChangeWorkflowStage
 	for i := range wf.Stages {
 		if wf.Stages[i].Name == stage {
 			st = &wf.Stages[i]
@@ -146,13 +127,13 @@ func (p *Presenter) StageSpaces(r *Rollout, stage string) (map[uuid.UUID]bool, e
 		for _, s := range wf.Stages {
 			names = append(names, s.Name)
 		}
-		return nil, fmt.Errorf("workflow %s has no stage %q (stages: %s)", wf.Slug, stage, strings.Join(names, ", "))
+		return nil, fmt.Errorf("change order %s has no stage %q (stages: %s)", r.ChangeOrder.Slug, stage, strings.Join(names, ", "))
 	}
 	where := st.WhereSpace
-	if r.Component != "" {
+	if r.Space.ComponentID != nil {
 		// The where parser takes no parentheses; the seeder's selectors are plain
 		// conjunctions, so appending is safe.
-		where = fmt.Sprintf("%s AND Labels.Component = '%s'", where, r.Component)
+		where = fmt.Sprintf("%s AND ComponentID = '%s'", where, r.Space.ComponentID)
 	}
 	spaces, err := p.Client.ListSpaces(where)
 	if err != nil {
@@ -172,53 +153,13 @@ func (p *Presenter) StageSpaces(r *Rollout, stage string) (map[uuid.UUID]bool, e
 	return members, nil
 }
 
-// workflowFor resolves the ChangeWorkflow entity the change order is promoted
-// under: the pinned SDK has no client for the entity, so the change order and
-// the workflow are read through cub. The change order's own -o json carries
-// ChangeWorkflowID.
-func (p *Presenter) workflowFor(r *Rollout) (*Workflow, error) {
-	coJSON, err := cubexec.Run("changeorder", "get", r.ChangeOrder.Slug, "--space", r.Space.Slug, "--quiet", "-o", "json")
-	if err != nil {
-		return nil, err
-	}
-	id := extractChangeWorkflowID(coJSON)
-	if id == "" {
+// workflowFor returns the stages the change order is promoted through: its
+// own copy of the ChangeWorkflow it was created under, which is what the
+// server promotes by.
+func (p *Presenter) workflowFor(r *Rollout) (*goclient.ChangeWorkflowSpec, error) {
+	wf := r.ChangeOrder.ChangeWorkflow
+	if wf == nil || len(wf.Stages) == 0 {
 		return nil, fmt.Errorf("change order %s names no ChangeWorkflow, so it has no stages", r.ChangeOrder.Slug)
 	}
-	wfJSON, err := cubexec.Run("changeworkflow", "get", id, "--space", "*", "--quiet", "-o", "json")
-	if err != nil {
-		return nil, err
-	}
-	var wrapped struct {
-		ChangeWorkflow *Workflow `json:"ChangeWorkflow"`
-	}
-	if jerr := json.Unmarshal([]byte(wfJSON), &wrapped); jerr == nil && wrapped.ChangeWorkflow != nil && len(wrapped.ChangeWorkflow.Stages) > 0 {
-		return wrapped.ChangeWorkflow, nil
-	}
-	var wf Workflow
-	if err := json.Unmarshal([]byte(wfJSON), &wf); err != nil {
-		return nil, fmt.Errorf("ChangeWorkflow %s: %w", id, err)
-	}
-	if len(wf.Stages) == 0 {
-		return nil, fmt.Errorf("ChangeWorkflow %s has no stages", id)
-	}
-	return &wf, nil
-}
-
-// extractChangeWorkflowID digs ChangeWorkflowID out of a change order's -o
-// json, whether the entity is at the top level or wrapped.
-func extractChangeWorkflowID(coJSON string) string {
-	var wrapped struct {
-		ChangeOrder struct {
-			ChangeWorkflowID string `json:"ChangeWorkflowID"`
-		} `json:"ChangeOrder"`
-		ChangeWorkflowID string `json:"ChangeWorkflowID"`
-	}
-	if err := json.Unmarshal([]byte(coJSON), &wrapped); err != nil {
-		return ""
-	}
-	if wrapped.ChangeOrder.ChangeWorkflowID != "" {
-		return wrapped.ChangeOrder.ChangeWorkflowID
-	}
-	return wrapped.ChangeWorkflowID
+	return wf, nil
 }

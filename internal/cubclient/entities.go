@@ -70,36 +70,6 @@ func (c *Client) DeleteSpace(spaceID uuid.UUID, force bool) error {
 	return nil
 }
 
-// WorkerBySlug returns the worker with the given slug in the space, or nil.
-func (c *Client) WorkerBySlug(spaceID uuid.UUID, slug string) (*goclient.BridgeWorker, error) {
-	where := "Slug = '" + slug + "'"
-	res, err := c.api.ListBridgeWorkersWithResponse(c.ctx, spaceID, &goclient.ListBridgeWorkersParams{Where: &where})
-	if cubapi.IsAPIError(err, res) {
-		return nil, cubapi.InterpretErrorGeneric(err, res)
-	}
-	if res.JSON200 == nil {
-		return nil, nil
-	}
-	for _, ext := range *res.JSON200 {
-		if ext.BridgeWorker != nil && ext.BridgeWorker.Slug == slug {
-			return ext.BridgeWorker, nil
-		}
-	}
-	return nil, nil
-}
-
-// CreateWorker creates a bridge worker.
-func (c *Client) CreateWorker(spaceID uuid.UUID, worker goclient.BridgeWorker) (*goclient.BridgeWorker, error) {
-	res, err := c.api.CreateBridgeWorkerWithResponse(c.ctx, spaceID, &goclient.CreateBridgeWorkerParams{}, worker)
-	if cubapi.IsAPIError(err, res) {
-		return nil, cubapi.InterpretErrorGeneric(err, res)
-	}
-	if res.JSON200 == nil {
-		return nil, fmt.Errorf("create worker %q: %s", worker.Slug, res.Status())
-	}
-	return res.JSON200, nil
-}
-
 // TargetBySlug returns the target with the given slug in the space, or nil.
 func (c *Client) TargetBySlug(spaceID uuid.UUID, slug string) (*goclient.Target, error) {
 	where := "Slug = '" + slug + "'"

@@ -3,20 +3,19 @@ package seed
 import (
 	"fmt"
 	"sort"
-	"time"
 
-	"github.com/confighub/sdk/core/livestatus"
+	goclient "github.com/confighub/sdk/core/openapi/goclient-new"
 	"github.com/google/uuid"
 
 	"github.com/confighub/cub-demo/internal/cubclient"
-	"github.com/confighub/cub-demo/internal/cubexec"
 	"github.com/confighub/cub-demo/internal/scenario"
 )
 
 // stories seeds the in-flight change orders: make the change in the root
 // base, create the change order under the shared workflow matching the
-// component's class coverage, then walk it stage by stage to landedThrough — releasing and reporting healthy after
-// each deployment stage so the next stage's gates hold. Every step is
+// component's class coverage, then walk it stage by stage to landedThrough —
+// releasing and reporting healthy after each deployment stage so the next
+// stage's gates hold. Every step is
 // idempotent: re-applying the change alters no data, an existing change order
 // is reused, an already-promoted stage selects nothing, and re-releases skip.
 func (s *Seeder) stories() error {
@@ -60,21 +59,32 @@ func (s *Seeder) story(cm *scenario.ComponentModel, co scenario.ChangeOrder) err
 	}
 
 	coRef := cm.RootSpace + "/" + co.Slug
-	existing, err := s.Client.ChangeOrderBySlug(root.SpaceID, co.Slug)
+	def := s.Model.WorkflowFor(cm)
+	order, err := s.Client.ChangeOrderBySlug(root.SpaceID, co.Slug)
 	if err != nil {
 		return err
 	}
-	// A change order in a terminal state has nothing left to walk, and since
-	// v0.4.6 promoting a completed workflow is an error rather than a no-op.
+	// A change order in a terminal state has nothing left to walk, and
+	// promoting a completed workflow is an error rather than a no-op.
 	switch {
-	case existing != nil && (existing.State == "Released" || existing.State == "Aborted" ||
-		existing.State == "Restored" || existing.State == "RestoreReleased"):
-		fmt.Fprintf(s.Out, "  %s is %s; nothing to walk\n", coRef, existing.State)
+	case order != nil && (order.State == "Released" || order.State == "Aborted" ||
+		order.State == "Restored" || order.State == "RestoreReleased"):
+		fmt.Fprintf(s.Out, "  %s is %s; nothing to walk\n", coRef, order.State)
 		return nil
-	case existing == nil:
-		_, err := cubexec.Run("changeorder", "create", "--space", cm.RootSpace, co.Slug,
-			"--description", co.Description,
-			"--change-workflow", s.Model.Home+"/"+s.Model.WorkflowFor(cm).Slug)
+	case order == nil:
+		wf, err := s.workflow(def.Slug)
+		if err != nil {
+			return err
+		}
+		// Naming the workflow is all the scope a change order needs: the server
+		// heads it for the spaces of its own space's Component.
+		order, err = s.Client.CreateChangeOrder(root.SpaceID, goclient.ChangeOrder{
+			SpaceID:          root.SpaceID,
+			Slug:             co.Slug,
+			DisplayName:      co.Slug,
+			Description:      co.Description,
+			ChangeWorkflowID: &wf.ChangeWorkflowID,
+		})
 		if err != nil {
 			return err
 		}
@@ -83,10 +93,9 @@ func (s *Seeder) story(cm *scenario.ComponentModel, co scenario.ChangeOrder) err
 
 	// Walk the stages in order through landedThrough. The bound workflow's
 	// stages are exactly the component's classes (the workflow matches its
-	// coverage), so every stage selects spaces. Promotion is cub's own logic;
+	// coverage), so every stage selects spaces. Promotion is the server's;
 	// after each deployment stage the promoted spaces are released and
 	// reported healthy, which is exactly what the next stage's gates read.
-	def := s.Model.WorkflowFor(cm)
 	if co.LandedThrough != "bases" {
 		found := false
 		for _, cl := range def.Classes {
@@ -99,11 +108,11 @@ func (s *Seeder) story(cm *scenario.ComponentModel, co scenario.ChangeOrder) err
 		}
 	}
 	for _, st := range s.Model.WorkflowStages(def) {
-		if _, err := cubexec.Run("variant", "promote", "--change-order", coRef, "--target-stage", st.Name); err != nil {
-			return fmt.Errorf("promote stage %s: %w", st.Name, err)
+		if err := s.Client.PromoteStage(order.ChangeOrderID, st.Name); err != nil {
+			return err
 		}
 		if st.Class != "" {
-			if err := s.releaseStage(cm, st.Class, co); err != nil {
+			if err := s.releaseStage(cm, st.Class, order); err != nil {
 				return fmt.Errorf("release stage %s: %w", st.Name, err)
 			}
 		}
@@ -123,9 +132,31 @@ func (s *Seeder) story(cm *scenario.ComponentModel, co scenario.ChangeOrder) err
 	return nil
 }
 
-// releaseStage publishes and reports healthy every deployment of one class of
-// the component, skipping spaces with nothing unreleased.
-func (s *Seeder) releaseStage(cm *scenario.ComponentModel, class string, co scenario.ChangeOrder) error {
+// workflow returns the demo's ChangeWorkflow entity with the slug, from the
+// home space.
+func (s *Seeder) workflow(slug string) (*goclient.ChangeWorkflow, error) {
+	home := s.space(s.Model.Home)
+	if home == nil {
+		return nil, fmt.Errorf("home space %s does not exist; run the home phase first", s.Model.Home)
+	}
+	workflows, err := s.Client.ListChangeWorkflows(home.SpaceID)
+	if err != nil {
+		return nil, err
+	}
+	for _, wf := range workflows {
+		if wf.Slug == slug {
+			return wf, nil
+		}
+	}
+	return nil, fmt.Errorf("change workflow %s/%s does not exist; run the workflows phase first", s.Model.Home, slug)
+}
+
+// releaseStage publishes, for the change order, every deployment of one class
+// of the component that has something unreleased, then reports the whole
+// class healthy. Status is the Release's, so each new Release starts with
+// none and is reported on here, the way the delivery system would after
+// syncing it.
+func (s *Seeder) releaseStage(cm *scenario.ComponentModel, class string, order *goclient.ChangeOrder) error {
 	units, err := s.Client.ListUnitsAll(fmt.Sprintf("%s AND Labels.Component = '%s' AND Labels.Stage = '%s' AND Space.Labels.Role = 'deployment'",
 		demoWhere(s.Model), cm.Name, class))
 	if err != nil {
@@ -142,23 +173,24 @@ func (s *Seeder) releaseStage(cm *scenario.ComponentModel, class string, co scen
 		ids = append(ids, id)
 	}
 	labels := s.baseLabels(nil)
-	if err := forEach(s, ids, func(id uuid.UUID) error { return s.Client.PublishRelease(id, labels) }); err != nil {
+	err = forEach(s, ids, func(id uuid.UUID) error {
+		_, err := s.Client.PublishRelease(id, labels, order)
 		return err
-	}
-
-	now := time.Now().UTC().Format(time.RFC3339)
-	healthy := livestatus.Status{Source: liveStatusSource, SyncStatus: "Synced", HealthStatus: "Healthy",
-		OperationPhase: "Succeeded", ObservedAt: now}
-	patch, err := statusPatch(healthy)
+	})
 	if err != nil {
 		return err
 	}
-	whereSp := fmt.Sprintf("%s AND Labels.Component = '%s' AND Labels.Stage = '%s' AND Labels.Role = 'deployment'",
-		demoWhere(s.Model), cm.Name, class)
-	return s.Client.BulkPatchSpaces(whereSp, patch)
+	want := map[string]Observation{}
+	for _, d := range cm.Deployments {
+		if d.Class == class {
+			want[d.Space] = Healthy
+		}
+	}
+	_, err = s.report(want)
+	return err
 }
 
-// degradeStage paints the first co.Degrade deployments (sorted, so it is
+// degradeStage reports the first co.Degrade deployments (sorted, so it is
 // deterministic) of the landedThrough class Degraded.
 func (s *Seeder) degradeStage(cm *scenario.ComponentModel, co scenario.ChangeOrder) error {
 	var slugs []string
@@ -171,21 +203,15 @@ func (s *Seeder) degradeStage(cm *scenario.ComponentModel, co scenario.ChangeOrd
 	if co.Degrade < len(slugs) {
 		slugs = slugs[:co.Degrade]
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
+	want := map[string]Observation{}
 	for _, slug := range slugs {
-		sp := s.space(slug)
-		if sp == nil {
-			continue
-		}
-		st := livestatus.Status{Source: liveStatusSource, SyncStatus: "Synced", HealthStatus: "Degraded",
-			OperationPhase: "Succeeded", Message: co.Slug + ": rollout stalled, 1 pod CrashLoopBackOff", ObservedAt: now}
-		patch, err := statusPatch(st)
-		if err != nil {
-			return err
-		}
-		if err := s.Client.PatchSpace(sp.SpaceID, patch); err != nil {
-			return err
-		}
+		want[slug] = Observation{Sync: "Synced", Health: "Degraded", Phase: "Succeeded",
+			Message: co.Slug + ": rollout stalled, 1 pod CrashLoopBackOff"}
+	}
+	if _, err := s.report(want); err != nil {
+		return err
+	}
+	for _, slug := range slugs {
 		fmt.Fprintf(s.Out, "  degraded %s (blocks the next stage's healthy gate)\n", slug)
 	}
 	return nil

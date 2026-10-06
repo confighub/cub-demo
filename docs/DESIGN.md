@@ -45,8 +45,8 @@ Nothing is provisioned. Clusters are ConfigHub Targets; deployments are publishe
 - **Crossplane for external resources** (provider-aws managed resources as units inside the
   workload that uses them). Cloud-neutral, and the shape `examples/eks-manager` and
   `examples/configboard` already understand.
-- **Entity quotas are not a design input.** Default org quotas (100 Spaces, 250 Targets and
-  Workers, 1000 Units and Links) are far below the dataset; they are raised server-side
+- **Entity quotas are not a design input.** Default org quotas (100 Spaces, 250 Targets,
+  1000 Units and Links) are far below the dataset; they are raised server-side
   (`confighub admin quota set`). The tool reports a quota error clearly and does not shrink the
   demo to fit.
 - **Workflows use the bases-first shape.** The product intends a workflow stage to span
@@ -60,26 +60,30 @@ Nothing is provisioned. Clusters are ConfigHub Targets; deployments are publishe
 
 ## Product facts the design rests on
 
-Verified against the ConfigHub server codebase on 2026-08-29. File paths are in that repo.
+Verified against the ConfigHub server codebase on 2026-08-29 and again at v0.8.4 on
+2026-10-06, the oldest server this version of the tool works with. File paths are in that
+repo.
 
 **Delivery model.** The bridge/apply path is gone. A Target is an address; configuration
 reaches a cluster by publishing a Release (an OCI bundle of a Space) that Argo CD or Flux pulls.
-A fake cluster is therefore a Space plus an OCI Target (`ProviderType: OCI`, `ToolchainType:
-Any`, `Parameters: "{}"`, `Facts` map) bound to a **server-hosted worker**
-(`ProvidedInfo{IsServerWorker: true, SupportedConfigTypes: [{OCI, Any}]}`, `OrgRole: none`),
-which reports `Ready` with no process behind it. One worker can back every target. Recipe:
-`public/cmd/cub/cluster_api.go` (`clusterCreateOCIWorker`, `clusterCreateOCITarget`).
+A Target names no worker, provider or toolchain, so a fake cluster is a Space plus a Target
+carrying a `Facts` map, with nothing behind it. Recipe: `public/cmd/cub/cluster_api.go`
+(`clusterCreateOCITarget`; the worker `cub cluster up` also creates is the identity its
+in-cluster puller logs in with, which a fake cluster has no use for).
 
-**Components and variants are label conventions**, not entities (`public/cmd/cub/component.go`,
-`space_labels.go`). A component is the set of Spaces sharing a `Component` label; each Space is
-one variant, named by `Variant`; a variant with no target is a base. Slug convention
-`<component>-<variant>`. The upstream relation is the `UpstreamSpaceID` annotation on the Space
-plus `UpgradeUnit` links and clone lineage on the units, all created by the server when a Space
-and its units are bulk-cloned. The tree must be a tree.
+**A Component is an entity** in the organization, in no Space (`public/cmd/cub/component.go`).
+Its variants are the Spaces naming it with `ComponentID`; each is named by its `Variant` label,
+and a variant with no target is a base. Slug convention `<component>-<variant>`. Spaces are
+selected by component with `ComponentID = '<id>'` or `Component.Slug = '<slug>'`; a unit has no
+component of its own, so unit queries use `Space.ComponentID` or the `Component` unit label the
+tool adds. The upstream relation is the `UpstreamSpaceID` annotation on the Space plus
+`UpgradeUnit` links and clone lineage on the units, all created by the server when a Space and
+its units are bulk-cloned. The tree must be a tree.
 
 **`cub variant create` is three API calls** (`public/cmd/cub/variant_create.go`):
 `BulkCreateSpaces` selecting the upstream Space with `VariantLabels` and `NamePattern`
-`template:{{.Labels.Component}}-{{.Labels.Variant}}` and a patch carrying `UpstreamSpaceID`;
+`template:{{.Component.Slug}}-{{.Labels.Variant}}` and a patch carrying `UpstreamSpaceID` (the
+clone inherits the upstream's `ComponentID`);
 `PatchSpace` setting `ReleaseTargetID`; `BulkCreateUnits` selecting the upstream Space's units
 with `WhereSpace` naming the new Space. Two server behaviours let this fan out: `VariantLabels`
 accepts `Key=v1|v2|v3` and produces the cross product (`internal/views/bulk_handlers.go`), and a
@@ -102,17 +106,28 @@ creation and teardown order. `PublishRelease` builds the bundle server-side and 
 `Unit.LastReleasedRevisionNum`; a unit with `HeadRevisionNum > LastReleasedRevisionNum` shows as
 having unreleased changes.
 
-**Live status** is the Space annotation `confighub.com/live-status` holding JSON
-`{source, app, syncStatus, healthStatus, operationPhase, revision, message, observedAt}`
-(`public/core/livestatus/livestatus.go`, value ≤ 1024 bytes). The UI renders it on the component
-graph; `cub variant promote`'s `healthy` prerequisite requires `Synced`, `Succeeded` and
-`Healthy`, and `released` requires a Release published after the promotion.
+**Live status** is `Release.LiveStatus`, written as a patch of the Release by the tool that
+deploys it (argobot, for Argo CD): `Reporter`, `DataSource`, normalized `Sync`, `Health` and
+`Operation`, the reporter's own words beside them, `Message`, `ObservedAt`
+(`public/core/livestatus/livestatus.go` maps Argo CD's vocabulary). A newly published Release
+has none until something reports on it, and a Space that was never released has no status at
+all. The UI renders the latest Release's status on the component graph. The `Healthy`
+prerequisite reads the latest published Release of each Space of the stage ahead and requires
+`Synced` and `Healthy` with no operation running or failed; `Released` requires a published
+Release carrying the change.
 
-**Change workflows today (v0.4.15+).** The definition is a first-class ChangeWorkflow entity —
+**Change workflows today (v0.8).** The definition is a first-class ChangeWorkflow entity —
 `Stages[]{Name, WhereSpace, Prerequisites}` plus `Final` — that names no component and no base
-Space: a ChangeOrder binds one at creation (`cub changeorder create --change-workflow`), and
-the change order's own Space supplies both, the server narrowing every stage selector by that
-component (stage selectors must not name `Labels.Component` themselves). One workflow
+Space: a ChangeOrder binds one at creation (`cub changeorder create --change-workflow`) and
+keeps its own copy of the stages. The change order's Space supplies the Component: the server
+heads the change order for that Component's Spaces and narrows every stage selector by it
+(stage selectors must not name the component themselves). Creation and promotion are server
+operations (`CreateChangeOrder`, `POST /api/promote`), which the seeder calls directly. A
+Release published for a change order (`cub release publish --revision ChangeOrder:<slug>`,
+`ChangeOrderID` in the API) is recorded on the Release, and that is what advances the change
+order's `Stage`, up to `Completed`, when the Release is published and when live status is
+reported on it; a Release of the same revisions published without naming the change order
+satisfies the gates but leaves `Stage` where it was. One workflow
 therefore governs many components' rollouts — but only components of the same rollout
 *shape*: promotion past a stage that selects no space is refused, so the tool creates one
 shared workflow per distinct class coverage (`standard-rollout` for full coverage, which most
@@ -135,8 +150,8 @@ the wrong side of the line.
 
 Concretely: `plays:` in the scenario maps names to step sequences, run with `cub demo play
 <name>`. A step is a shell line (`run:`) or a call to a tool primitive (`call:` + `with:`) —
-`observe` (write a live-status observation by selector, optionally only where a release is
-newer than the last observation), `invoke` (one ConfigHub function against one unit),
+`observe` (report live status on the latest Release of the selected spaces, optionally only
+where nothing has reported on it yet), `invoke` (one ConfigHub function against one unit),
 `bump-image` (read the base's current tag, bump it, write it back; exports `.Version` to the
 steps after it), `changeorder` (create one bound to the component's shared workflow). Strings are
 templates over the scenario plus the exported variables. So a scenario's "ship" and
@@ -169,9 +184,10 @@ internal change-workflows demo uses this to make the gates themselves the demo.
 (`--concurrency`, default 8). Every entity is labelled `DemoName=<scenario name>`, and every
 org-wide `where` the tool issues includes that label, so nothing outside the demo is selected.
 
-1. **home** — the home Space; the server-hosted worker.
-2. **clusters** — per cluster: Space, then OCI Target with facts.
-3. **bases** — per component: root base Space with one unit per manifest file (data uploaded,
+1. **home** — the home Space.
+2. **clusters** — per cluster: Space, then Target with facts.
+3. **bases** — per component: the Component entity; root base Space naming it, with one unit
+   per manifest file (data uploaded,
    skipped when `DataHash` already matches); class bases in one `BulkCreateSpaces`; their units in
    one `BulkCreateUnits`; class policy as one `InvokeFunctionsOnOrg` per (component, class).
    Class policy is applied before phase 4 so deployments clone the class data.
@@ -181,13 +197,20 @@ org-wide `where` the tool issues includes that label, so nothing outside the dem
    take their Space's target); region and cluster functions; unit labels per cluster.
 5. **releases** — `PublishRelease` per deployment Space, skipping the story's deliberately
    unreleased set and any Space with nothing unreleased.
-6. **status** — the healthy live-status annotation in bulk per (component, class), then the
-   story's Degraded / OutOfSync / Progressing exceptions individually.
+6. **status** — Synced/Healthy reported on the latest Release of each deployment Space, with
+   the story's Degraded / OutOfSync / Progressing exceptions; a Release already carrying its
+   intended status is left alone.
 7. **views** — org-wide Filters and Views in the home Space.
 8. **workflows and stories** — the shared ChangeWorkflow entities (one per distinct class
-   coverage) and the in-flight ChangeOrders bound to them; legacy per-component workflow
-   entities and pre-entity workflow units converge away (kept only while a change order
-   still moves under one).
+   coverage) and the in-flight ChangeOrders bound to them, each promoted stage by stage and
+   released for the change order; legacy per-component workflow entities converge away (kept
+   only while a change order still moves under one).
+
+**An org seeded before v0.8 converges on the next `up`.** The bases phase creates the
+Component entities and moves each component's Spaces from the old `Component` label to
+`ComponentID`; the status phase reports on Releases and clears the old live-status Space
+annotation. The server-hosted worker an old seeding left in the home Space is unused and goes
+with the home Space on `down`.
 
 **Slugs are org-global and scenarios must not collide.** The seeder refuses to adopt a space
 whose `DemoName` label names another owner (or none), so a colliding scenario fails loudly
@@ -203,8 +226,9 @@ unreleased; function and patch phases record a marker annotation on the home Spa
 are collected per item — bulk requests answer 207 with per-entity results — and reported with
 slugs at the end; a quota error names the `confighub admin quota set` command that lifts it.
 
-**Teardown** follows the foreign keys: deployment Spaces (recursively, taking units, links and
-releases) → class bases → root bases → cluster Spaces (targets) → home Space (the worker last).
+**Teardown** follows the references, which the server refuses to break: deployment Spaces
+(recursively, taking units, links and releases) → class bases → root bases → Component
+entities → cluster Spaces (targets) → home Space.
 `down` and `reset` keep the `<name>-scenario` space, so the demo stays installed; only
 `uninstall` deletes it.
 

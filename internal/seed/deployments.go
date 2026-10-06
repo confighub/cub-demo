@@ -135,6 +135,10 @@ func (s *Seeder) deployments() error {
 	// ReleaseTargetID, which step 2 just set.
 	err = forEach(s, pairs, func(p pair) error {
 		base := s.space(p.cb.Space)
+		component := s.component(p.cm.Name)
+		if component == nil {
+			return fmt.Errorf("component %s does not exist; run the bases phase first", p.cm.Name)
+		}
 		var slugs []string
 		for _, d := range p.cm.Deployments {
 			if d.Class == p.cb.Class {
@@ -143,8 +147,8 @@ func (s *Seeder) deployments() error {
 		}
 		for _, group := range chunks(slugs, unitChunk) {
 			where := fmt.Sprintf("SpaceID = '%s'", base.SpaceID)
-			whereSpace := fmt.Sprintf("%s AND Labels.Component = '%s' AND Labels.Role = 'deployment' AND Slug IN (%s)",
-				demoWhere(s.Model), p.cm.Name, strings.Join(group, ", "))
+			whereSpace := fmt.Sprintf("%s AND ComponentID = '%s' AND Labels.Role = 'deployment' AND Slug IN (%s)",
+				demoWhere(s.Model), component.ComponentID, strings.Join(group, ", "))
 			allow := "true"
 			include := "UpstreamUnitID,SpaceID,TargetID"
 			_, err := s.Client.BulkCreateUnits(&goclient.BulkCreateUnitsParams{

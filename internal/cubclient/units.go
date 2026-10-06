@@ -87,7 +87,7 @@ func (c *Client) DownloadUnitData(spaceID, unitID uuid.UUID) ([]byte, error) {
 
 // DeleteUnit deletes a unit.
 func (c *Client) DeleteUnit(spaceID, unitID uuid.UUID) error {
-	res, err := c.api.DeleteUnitWithResponse(c.ctx, spaceID, unitID)
+	res, err := c.api.DeleteUnitWithResponse(c.ctx, spaceID, unitID, &goclient.DeleteUnitParams{})
 	if cubapi.IsAPIError(err, res) {
 		return cubapi.InterpretErrorGeneric(err, res)
 	}

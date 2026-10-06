@@ -7,11 +7,13 @@ import (
 	goclient "github.com/confighub/sdk/core/openapi/goclient-new"
 )
 
-// Teardown deletes every space of the demo, most-dependent first: deployments
-// (whose ReleaseTargetID references cluster targets), then bases, then cluster
-// spaces (targets die with their space), then the home space, whose worker
-// every target referenced. Space deletion is recursive, taking units, links
-// and releases with it. With keepDefinition (down, reset) the <name>-scenario
+// Teardown deletes every space of the demo, most-dependent first, because the
+// server refuses to delete what something else still refers to: deployments
+// (whose units link to their class base's and whose ReleaseTargetID names a
+// cluster target), then class bases (whose units link to the root's), then
+// root bases, then the Component entities no space names any more, then
+// cluster spaces (targets die with their space), then the home space. Space deletion is recursive,
+// taking units, links and releases with it. With keepDefinition (down, reset) the <name>-scenario
 // space survives, so the demo stays installed and up can re-create the
 // dataset; uninstall passes false and removes the definition too.
 func (s *Seeder) Teardown(force, keepDefinition bool) error {
@@ -30,12 +32,20 @@ func (s *Seeder) Teardown(force, keepDefinition bool) error {
 		name string
 		pick func(*goclient.Space) bool
 	}{
-		{"deployments", func(sp *goclient.Space) bool { return sp.Labels["Role"] == "deployment" }},
-		{"bases", func(sp *goclient.Space) bool { return sp.Labels["Role"] == "base" }},
-		{"clusters", func(sp *goclient.Space) bool { return sp.Labels["Layer"] == "cluster" }},
+		{"deployment", func(sp *goclient.Space) bool { return sp.Labels["Role"] == "deployment" }},
+		{"class base", func(sp *goclient.Space) bool { return sp.Labels["Role"] == "base" && sp.Labels["Variant"] != "base" }},
+		{"root base", func(sp *goclient.Space) bool { return sp.Labels["Role"] == "base" }},
+		{"components", nil},
+		{"cluster", func(sp *goclient.Space) bool { return sp.Labels["Layer"] == "cluster" }},
 		{"home", func(sp *goclient.Space) bool { return sp.Labels["Layer"] == "demo" }},
 	}
 	for _, g := range groups {
+		if g.pick == nil {
+			if err := s.deleteComponents(); err != nil {
+				return err
+			}
+			continue
+		}
 		var batch []*goclient.Space
 		for slug, sp := range s.spaces {
 			if !claimed[slug] && g.pick(sp) {
@@ -82,6 +92,33 @@ func (s *Seeder) Teardown(force, keepDefinition bool) error {
 	return nil
 }
 
+// deleteComponents deletes the demo's Component entities. A Component is in
+// no space, so no space deletion takes it; it goes once its variants have.
+func (s *Seeder) deleteComponents() error {
+	components := make([]*goclient.Component, 0, len(s.components))
+	for _, c := range s.components {
+		components = append(components, c)
+	}
+	if len(components) == 0 {
+		return nil
+	}
+	if s.DryRun {
+		fmt.Fprintf(s.Out, "  would delete %d components\n", len(components))
+		return nil
+	}
+	err := forEach(s, components, func(c *goclient.Component) error {
+		if err := s.Client.DeleteComponent(c.ComponentID); err != nil {
+			return fmt.Errorf("delete component %s: %w", c.Slug, err)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("deleting components: %w", err)
+	}
+	fmt.Fprintf(s.Out, "  deleted %d components\n", len(components))
+	return nil
+}
+
 // Gap is one category of missing entities reported by Status.
 type Gap struct {
 	Phase   string
@@ -117,7 +154,7 @@ func (s *Seeder) Status() ([]Gap, error) {
 	}
 	gaps = append(gaps, Gap{Phase: "cluster targets", Want: len(s.Model.Clusters), Have: targets})
 
-	var roots, classBases, deployments []string
+	var components, roots, classBases, deployments []string
 	wantUnits := 0
 	pending := 0
 	for _, cm := range s.Model.Components {
@@ -126,6 +163,7 @@ func (s *Seeder) Status() ([]Gap, error) {
 			pending++
 			continue
 		}
+		components = append(components, cm.Name)
 		roots = append(roots, cm.RootSpace)
 		for _, cb := range cm.ClassBases {
 			classBases = append(classBases, cb.Space)
@@ -137,6 +175,7 @@ func (s *Seeder) Status() ([]Gap, error) {
 	}
 	exists := func(slug string) bool { return s.space(slug) != nil }
 	gaps = append(gaps,
+		gap("components", components, false, func(slug string) bool { return s.components[slug] != nil }),
 		gap("root bases", roots, false, exists),
 		gap("class bases", classBases, false, exists),
 		gap("deployment spaces", deployments, false, exists))
@@ -154,13 +193,29 @@ func (s *Seeder) Status() ([]Gap, error) {
 	wantReleases := len(deployments) - overlap(deployments, s.Model.Story.Unreleased)
 	gaps = append(gaps, Gap{Phase: "released deployments", Want: wantReleases, Have: releases})
 
-	painted := 0
-	for _, slug := range deployments {
-		if sp := s.space(slug); sp != nil && sp.Annotations["confighub.com/live-status"] != "" {
-			painted++
+	// Live status is the latest Release's, so only a released deployment can
+	// have one; components the scenario leaves unreported are not counted.
+	latest, err := s.Client.LatestReleases(fmt.Sprintf("Space.Labels.%s = '%s'", LabelDemoName, s.Model.Scenario.Name))
+	if err != nil {
+		return nil, err
+	}
+	reportable, reported := 0, 0
+	for _, cm := range s.Model.Components {
+		if !cm.HasManifests || cm.LiveStatus == "none" {
+			continue
+		}
+		for _, d := range cm.Deployments {
+			sp := s.space(d.Space)
+			if sp == nil || latest[sp.SpaceID] == nil {
+				continue
+			}
+			reportable++
+			if latest[sp.SpaceID].LiveStatus != nil {
+				reported++
+			}
 		}
 	}
-	gaps = append(gaps, Gap{Phase: "live status painted", Want: len(deployments), Have: painted})
+	gaps = append(gaps, Gap{Phase: "live status reported", Want: reportable, Have: reported})
 	if pending > 0 {
 		gaps = append(gaps, Gap{Phase: fmt.Sprintf("(%d components pending content)", pending)})
 	}

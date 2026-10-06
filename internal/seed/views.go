@@ -30,7 +30,9 @@ func (s *Seeder) views() error {
 		slug, display, from, where, groupBy string
 		columns                             []string
 	}
-	spaceCols := []string{"Slug", "Labels.Component", "Labels.Stage", "Labels.Region", "Labels.Department"}
+	// A space names its component with ComponentID, which no view column
+	// renders as a name; a variant's slug starts with it, so Slug carries it.
+	spaceCols := []string{"Slug", "Labels.Variant", "Labels.Stage", "Labels.Region", "Labels.Department"}
 	defs := []def{
 		{"fleet-clusters", "Fleet clusters", "Space",
 			demoWhere(s.Model) + " AND Labels.Layer = 'cluster'", "Labels.Region",
@@ -40,7 +42,8 @@ func (s *Seeder) views() error {
 		{"payments-fleet", "Payments fleet", "Space",
 			demoWhere(s.Model) + " AND Labels.Department = 'payments'", "Labels.Stage", spaceCols},
 		{"platform-catalog", "Platform catalog", "Space",
-			demoWhere(s.Model) + " AND Labels.Layer = 'platform' AND Labels.Role = 'base'", "Labels.Component", spaceCols},
+			demoWhere(s.Model) + " AND Labels.Layer = 'platform' AND Labels.Role = 'base'", "Labels.Owner",
+			[]string{"Slug", "Labels.Variant", "Labels.Stage", "Labels.Owner"}},
 		{"never-released", "Never released", "Unit",
 			demoWhere(s.Model) + " AND Space.Labels.Role = 'deployment' AND LastReleasedRevisionNum = 0", "Labels.Component",
 			[]string{"Slug", "Space.Slug", "Labels.Component", "Labels.Stage", "HeadRevisionNum"}},

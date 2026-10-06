@@ -1,6 +1,8 @@
 package cubclient
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 
 	"github.com/confighub/sdk/core/cubapi"
@@ -8,17 +10,58 @@ import (
 	"github.com/google/uuid"
 )
 
-// PublishRelease publishes a release of the space: the server bundles the head
-// revision of every unit assigned to the space's release target.
-func (c *Client) PublishRelease(spaceID uuid.UUID, labels map[string]string) error {
-	res, err := c.api.PublishReleaseWithResponse(c.ctx, spaceID, goclient.ReleasePublishRequest{Labels: labels})
+// PublishRelease publishes a release of the space and returns it: the server
+// bundles the head revision of every unit assigned to the space's release
+// target. Given a change order, the release is published for it, as "cub
+// release publish --revision ChangeOrder:<slug>" does: it bundles each unit
+// where the change order ended, and the server records the change order on
+// the Release, which is what lets the release and the live status later
+// reported on it advance the change order through its workflow.
+func (c *Client) PublishRelease(spaceID uuid.UUID, labels map[string]string, order *goclient.ChangeOrder) (*goclient.Release, error) {
+	body := goclient.ReleasePublishRequest{Labels: labels}
+	if order != nil {
+		body.TagID = &order.EndTagID
+		body.ChangeOrderID = &order.ChangeOrderID
+	}
+	res, err := c.api.PublishReleaseWithResponse(c.ctx, spaceID, body)
+	if cubapi.IsAPIError(err, res) {
+		return nil, cubapi.InterpretErrorGeneric(err, res)
+	}
+	if res.JSON200 == nil || res.JSON200.Release == nil {
+		return nil, fmt.Errorf("publish release: %s", res.Status())
+	}
+	return res.JSON200.Release, nil
+}
+
+// SetReleaseLiveStatus writes a Release's LiveStatus, the way the tool
+// deploying the Release reports on it.
+func (c *Client) SetReleaseLiveStatus(spaceID, releaseID uuid.UUID, status goclient.ReleaseLiveStatus) error {
+	patch, err := json.Marshal(map[string]any{"LiveStatus": status})
+	if err != nil {
+		return err
+	}
+	res, err := c.api.PatchReleaseWithBodyWithResponse(c.ctx, spaceID, releaseID, &goclient.PatchReleaseParams{},
+		mergePatch, bytes.NewReader(patch))
 	if cubapi.IsAPIError(err, res) {
 		return cubapi.InterpretErrorGeneric(err, res)
 	}
-	if res.StatusCode() >= 300 {
-		return fmt.Errorf("publish release: %s", res.Status())
-	}
 	return nil
+}
+
+// LatestReleases returns the newest release of each space that has one,
+// among the releases the where expression selects, keyed by space.
+func (c *Client) LatestReleases(where string) (map[uuid.UUID]*goclient.Release, error) {
+	releases, err := c.ListReleasesAll(where)
+	if err != nil {
+		return nil, err
+	}
+	latest := map[uuid.UUID]*goclient.Release{}
+	for _, r := range releases {
+		if cur := latest[r.SpaceID]; cur == nil || r.ReleaseNum > cur.ReleaseNum {
+			latest[r.SpaceID] = r
+		}
+	}
+	return latest, nil
 }
 
 // CountReleases returns the number of releases matching the where expression,

@@ -16,6 +16,7 @@ whoever picks the work up next.
 | 7 | README tour, CI, repo + install path | clonable; installable via `make plugin`, later `cub plugin install confighub/cub-demo` | 4 | **done** 2026-08-31 — started as an internal repo with path-based install; moved to confighub/cub-demo with release-based install 2026-09-14 |
 
 | 8 | Multi-demo support: per-scenario context pin, configurable stage prerequisites, provenance (scenario bundle stored in the target org), `cub demo list`; the `workflows` scenario (6 clusters, 3 components, per-stage gates differing) for demoing change workflows in the `demo` org | two demos in two orgs without footguns; every org self-describing | 7 | **done** 2026-09-01 — the workflows scenario moved out of the repo 2026-09-16 (demo content, maintained with the demo; installed by path) |
+| 9 | Server v0.8 data model: Component entities named by `ComponentID`, Targets without a worker, live status on Releases, change orders and promotion through the API (SDK v0.8.4) | `cub component list` shows the catalog; a story rollout reaches `Completed`; an org seeded earlier converges on `up` | 8 | **done** 2026-10-06 — e2e green against a v0.8.4 server |
 
 Milestones 5 and 6 are independent of each other.
 
@@ -52,6 +53,11 @@ A fictional global retail / payments / logistics group, all on AWS.
 - `cub resource list --view` does not apply the view's attached Filter and leaves
   `Space.Labels.*` metadata columns blank; the Resource table also serves duplicate rows (a
   stale blank twin per resource) — raised 2026-09-02, issues pending.
+- Space views have no component column since spaces name their Component by `ComponentID`
+  (the slug carries the name). The View Explorer in server v0.8.4 renders no such column;
+  a later release adds `Component` / `Component.Slug` for Space views. Once that is out,
+  put the column back in `internal/seed/views.go` and group `platform-catalog` by it again
+  — 2026-10-06.
 - The value-recording-triggers experiment was removed in favor of Resource views (Jesper's
   practice); meridian retains recorded Values on old revisions as inert history.
 

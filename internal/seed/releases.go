@@ -78,7 +78,7 @@ func (s *Seeder) releases() error {
 	}
 	labels := s.baseLabels(nil)
 	err = forEach(s, publish, func(id uuid.UUID) error {
-		if err := s.Client.PublishRelease(id, labels); err != nil {
+		if _, err := s.Client.PublishRelease(id, labels, nil); err != nil {
 			return fmt.Errorf("release %s: %w", slugByID[id], err)
 		}
 		return nil

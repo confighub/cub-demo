@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/confighub/cub-demo/internal/cubexec"
+	goclient "github.com/confighub/sdk/core/openapi/goclient-new"
+
 	"github.com/confighub/cub-demo/internal/scenario"
 )
 
@@ -17,15 +18,11 @@ const workflowHashAnnotation = "cub-demo.confighub.com/def-hash"
 
 // workflows ensures the scenario's shared ChangeWorkflow entities in the
 // home space: one per distinct class coverage, most components sharing the
-// standard one (v0.4.15+: workflows are first-class entities; the SDK this
-// plugin pins has no client for them, so creation shells out through cub).
-// A workflow names no component — change orders bind one at creation and
-// supply the component their stage selectors are narrowed by. Leftovers of
-// earlier designs converge away: pre-entity KRM workflow units are deleted,
-// and the per-component entities a pre-shared seeding created are deleted
-// unless a change order still in flight is promoted under them (deleting
-// those would strand the rollout; they go on a later run, once it
-// completes).
+// standard one. A workflow names no component — change orders bind one at
+// creation and supply the component their stage selectors are narrowed by.
+// The per-component entities an early seeding created converge away: they
+// are deleted unless a change order still in flight is promoted under them
+// (those go on a later run, once it completes).
 func (s *Seeder) workflows() error {
 	if s.Model.Scenario.Workflows.Disabled {
 		fmt.Fprintln(s.Out, "  workflows disabled by the scenario")
@@ -40,23 +37,16 @@ func (s *Seeder) workflows() error {
 		fmt.Fprintf(s.Out, "  would ensure %d shared workflow entities in %s\n", len(defs), s.Model.Home)
 		return nil
 	}
-
-	// One-time migration: drop the KRM workflow units a pre-v0.4.15 seeding
-	// created.
-	units, err := s.Client.ListUnits(home.SpaceID, "")
+	existing, err := s.Client.ListChangeWorkflows(home.SpaceID)
 	if err != nil {
 		return err
 	}
-	for _, u := range units {
-		if strings.HasSuffix(u.Slug, "-workflow") && u.ToolchainType == "AppConfig/YAML" {
-			if err := s.Client.DeleteUnit(home.SpaceID, u.UnitID); err != nil {
-				return fmt.Errorf("delete legacy workflow unit %s: %w", u.Slug, err)
-			}
-			fmt.Fprintf(s.Out, "  deleted legacy workflow unit %s (workflows are entities since v0.4.15)\n", u.Slug)
-		}
-	}
-	if err := s.retireStaleWorkflows(defs); err != nil {
+	if err := s.retireStaleWorkflows(defs, existing); err != nil {
 		return err
+	}
+	bySlug := map[string]*goclient.ChangeWorkflow{}
+	for _, wf := range existing {
+		bySlug[wf.Slug] = wf
 	}
 
 	ensured := 0
@@ -64,44 +54,40 @@ func (s *Seeder) workflows() error {
 		body := s.Model.WorkflowEntityJSON(def)
 		sum := sha256.Sum256(body)
 		hash := hex.EncodeToString(sum[:8])
-		existing, err := cubexec.Run("changeworkflow", "get", def.Slug, "--space", s.Model.Home, "--quiet", "-o", "json")
-		verb := "update"
-		if err != nil {
-			if !strings.Contains(existing, "not found") {
-				return fmt.Errorf("workflow %s: %w", def.Slug, err)
-			}
-			verb = "create"
-		} else if workflowAnnotations(existing)[workflowHashAnnotation] == hash {
+		cur := bySlug[def.Slug]
+		if cur != nil && cur.Annotations[workflowHashAnnotation] == hash {
 			continue
 		}
-		args := []string{"changeworkflow", verb, "--space", s.Model.Home, def.Slug, "--from-stdin",
-			"--label", LabelDemoName + "=" + s.Model.Scenario.Name,
-			"--annotation", workflowHashAnnotation + "=" + hash}
-		if _, err := cubexec.RunWithStdin(string(body), args...); err != nil {
+		// An update starts from the stored entity, so what the definition does
+		// not carry (permissions, delete gates) survives it.
+		wf := goclient.ChangeWorkflow{SpaceID: home.SpaceID, Slug: def.Slug}
+		if cur != nil {
+			wf = *cur
+			wf.Stages, wf.Final = nil, nil
+		}
+		if err := json.Unmarshal(body, &wf); err != nil {
+			return fmt.Errorf("workflow %s: %w", def.Slug, err)
+		}
+		if wf.Labels == nil {
+			wf.Labels = map[string]string{}
+		}
+		wf.Labels[LabelDemoName] = s.Model.Scenario.Name
+		if wf.Annotations == nil {
+			wf.Annotations = map[string]string{}
+		}
+		wf.Annotations[workflowHashAnnotation] = hash
+		if cur == nil {
+			_, err = s.Client.CreateChangeWorkflow(home.SpaceID, wf)
+		} else {
+			err = s.Client.UpdateChangeWorkflow(wf)
+		}
+		if err != nil {
 			return fmt.Errorf("workflow %s: %w", def.Slug, err)
 		}
 		ensured++
 	}
 	fmt.Fprintf(s.Out, "  ensured %d shared workflow entities in %s (%d created or updated)\n", len(defs), s.Model.Home, ensured)
 	return nil
-}
-
-// workflowAnnotations digs Annotations out of a changeworkflow's -o json,
-// whether the entity is at the top level or wrapped.
-func workflowAnnotations(raw string) map[string]string {
-	var wrapped struct {
-		ChangeWorkflow struct {
-			Annotations map[string]string `json:"Annotations"`
-		} `json:"ChangeWorkflow"`
-		Annotations map[string]string `json:"Annotations"`
-	}
-	if err := json.Unmarshal([]byte(raw), &wrapped); err != nil {
-		return nil
-	}
-	if len(wrapped.ChangeWorkflow.Annotations) > 0 {
-		return wrapped.ChangeWorkflow.Annotations
-	}
-	return wrapped.Annotations
 }
 
 // retireStaleWorkflows deletes this demo's workflow entities the scenario no
@@ -111,39 +97,12 @@ func workflowAnnotations(raw string) map[string]string {
 // rollout is promoted under it) with a note; a later run retires it. A stale
 // coverage workflow is kept with a note rather than deleted, because nothing
 // cheap proves no rollout still moves under it.
-func (s *Seeder) retireStaleWorkflows(defs []scenario.WorkflowDef) error {
-	raw, err := cubexec.Run("changeworkflow", "list", "--space", s.Model.Home, "--quiet", "-o", "json")
-	if err != nil {
-		// A home space with no workflows yet may list nothing; only a real
-		// failure matters, and the ensure step surfaces those.
-		return nil
-	}
-	// Each list element wraps the entity ({"ChangeWorkflow": {...}}); accept
-	// the flat shape too.
-	type wfFields struct {
-		Slug   string            `json:"Slug"`
-		Labels map[string]string `json:"Labels"`
-	}
-	var wrapped []struct {
-		ChangeWorkflow wfFields `json:"ChangeWorkflow"`
-		wfFields
-	}
-	if jerr := json.Unmarshal([]byte(raw), &wrapped); jerr != nil {
-		return nil
-	}
-	listed := make([]wfFields, 0, len(wrapped))
-	for _, w := range wrapped {
-		if w.ChangeWorkflow.Slug != "" {
-			listed = append(listed, w.ChangeWorkflow)
-		} else {
-			listed = append(listed, w.wfFields)
-		}
-	}
+func (s *Seeder) retireStaleWorkflows(defs []scenario.WorkflowDef, existing []*goclient.ChangeWorkflow) error {
 	wanted := map[string]bool{}
 	for _, def := range defs {
 		wanted[def.Slug] = true
 	}
-	for _, wf := range listed {
+	for _, wf := range existing {
 		if wanted[wf.Slug] || wf.Labels[LabelDemoName] != s.Model.Scenario.Name {
 			continue
 		}
@@ -158,7 +117,7 @@ func (s *Seeder) retireStaleWorkflows(defs []scenario.WorkflowDef) error {
 			fmt.Fprintf(s.Out, "  keeping legacy workflow %s: a change order of %s is still in flight under it; it retires once that completes\n", wf.Slug, component)
 			continue
 		}
-		if _, err := cubexec.Run("changeworkflow", "delete", wf.Slug, "--space", s.Model.Home); err != nil {
+		if err := s.Client.DeleteChangeWorkflow(wf.SpaceID, wf.ChangeWorkflowID); err != nil {
 			return fmt.Errorf("delete legacy workflow %s: %w", wf.Slug, err)
 		}
 		fmt.Fprintf(s.Out, "  deleted legacy per-component workflow %s (shared workflows govern components now)\n", wf.Slug)

@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	goclient "github.com/confighub/sdk/core/openapi/goclient-new"
-	"github.com/google/uuid"
 
 	"github.com/confighub/cub-demo/internal/cubclient"
 	"github.com/confighub/cub-demo/internal/manifests"
@@ -27,7 +26,7 @@ const fnsMarker = "confighub.com/demo-functions"
 
 // componentVariantPattern is the slug pattern for variant spaces, matching
 // "cub variant create" so the trees read identically.
-const componentVariantPattern = "template:{{.Labels.Component}}-{{.Labels.Variant}}"
+const componentVariantPattern = "template:{{.Component.Slug}}-{{.Labels.Variant}}"
 
 // bases builds each component's root base (units rendered from the manifest
 // files) and its class bases (server-side clones of the root, class policy
@@ -89,11 +88,16 @@ func (s *Seeder) componentBases(cm *scenario.ComponentModel) (bool, error) {
 		return true, nil
 	}
 
+	// The Component entity is what ties the tree together: the root base
+	// names it with ComponentID and every clone inherits that.
+	component, err := s.ensureComponent(cm)
+	if err != nil {
+		return false, err
+	}
 	rootLabels := s.baseLabels(map[string]string{
-		"Component": cm.Name,
-		"Variant":   "base",
-		"Role":      "base",
-		"Layer":     cm.Layer,
+		"Variant": "base",
+		"Role":    "base",
+		"Layer":   cm.Layer,
 	})
 	if cm.Owner != "" {
 		rootLabels["Owner"] = cm.Owner
@@ -101,7 +105,7 @@ func (s *Seeder) componentBases(cm *scenario.ComponentModel) (bool, error) {
 	if cm.Department != "" && cm.Department != "shared" {
 		rootLabels["Department"] = cm.Department
 	}
-	root, _, err := s.ensureSpace(cm.RootSpace, cm.Name+" base", rootLabels)
+	root, _, err := s.ensureSpace(cm.RootSpace, cm.Name+" base", rootLabels, &component.ComponentID)
 	if err != nil {
 		return false, err
 	}
@@ -188,8 +192,8 @@ func (s *Seeder) componentBases(cm *scenario.ComponentModel) (bool, error) {
 	}
 	if len(classes) > 0 {
 		where := fmt.Sprintf("SpaceID = '%s'", root.SpaceID)
-		whereSpace := fmt.Sprintf("Labels.%s = '%s' AND Labels.Component = '%s' AND Labels.Role = 'base' AND Labels.Variant IN (%s)",
-			LabelDemoName, s.Model.Scenario.Name, cm.Name, strings.Join(classes, ", "))
+		whereSpace := fmt.Sprintf("%s AND ComponentID = '%s' AND Labels.Role = 'base' AND Labels.Variant IN (%s)",
+			demoWhere(s.Model), component.ComponentID, strings.Join(classes, ", "))
 		allow := "true"
 		include := "UpstreamUnitID,SpaceID"
 		_, err = s.Client.BulkCreateUnits(&goclient.BulkCreateUnitsParams{
@@ -208,6 +212,78 @@ func (s *Seeder) componentBases(cm *scenario.ComponentModel) (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+// ensureComponent creates the component's Component entity if the index does
+// not have it, and brings the spaces of an org seeded before v0.8 under it.
+func (s *Seeder) ensureComponent(cm *scenario.ComponentModel) (*goclient.Component, error) {
+	component := s.component(cm.Name)
+	if component == nil {
+		labels := s.baseLabels(map[string]string{"Layer": cm.Layer})
+		if cm.Owner != "" {
+			labels["Owner"] = cm.Owner
+		}
+		if cm.Department != "" && cm.Department != "shared" {
+			labels["Department"] = cm.Department
+		}
+		if _, err := s.Client.EnsureComponent(goclient.Component{Slug: cm.Name, Labels: labels}); err != nil {
+			return nil, err
+		}
+		// Same guard as ensureSpace, for the same reason: a Component slug is
+		// unique in the organization, and AllowExists returns whatever owns it.
+		fresh, err := s.Client.ComponentBySlug(cm.Name)
+		if err != nil {
+			return nil, err
+		}
+		if fresh == nil {
+			return nil, fmt.Errorf("component %q vanished after create", cm.Name)
+		}
+		if owner := fresh.Labels[LabelDemoName]; owner != s.Model.Scenario.Name {
+			return nil, fmt.Errorf("component %q already exists and belongs to %s, not scenario %q; pick non-colliding names", cm.Name, describeOwner(owner), s.Model.Scenario.Name)
+		}
+		component = fresh
+		s.mu.Lock()
+		s.components[cm.Name] = component
+		s.mu.Unlock()
+	}
+	return component, s.adoptLegacySpaces(cm, component)
+}
+
+// legacyComponentLabel is the Space label that named a space's component
+// before Components were entities (server v0.8).
+const legacyComponentLabel = "Component"
+
+// adoptLegacySpaces converts the component's spaces in an org seeded before
+// v0.8: they name the Component with ComponentID and lose the label that
+// stood in for it. Converted spaces no longer match, so this runs once.
+func (s *Seeder) adoptLegacySpaces(cm *scenario.ComponentModel, component *goclient.Component) error {
+	var legacy []*goclient.Space
+	s.mu.Lock()
+	for _, sp := range s.spaces {
+		if sp.Labels[legacyComponentLabel] == cm.Name {
+			legacy = append(legacy, sp)
+		}
+	}
+	s.mu.Unlock()
+	if len(legacy) == 0 {
+		return nil
+	}
+	patch, _ := json.Marshal(map[string]any{
+		"ComponentID": component.ComponentID.String(),
+		"Labels":      map[string]any{legacyComponentLabel: nil},
+	})
+	where := fmt.Sprintf("%s AND Labels.%s = '%s'", demoWhere(s.Model), legacyComponentLabel, cm.Name)
+	if err := s.Client.BulkPatchSpaces(where, patch); err != nil {
+		return fmt.Errorf("adopt pre-v0.8 spaces: %w", err)
+	}
+	s.mu.Lock()
+	for _, sp := range legacy {
+		sp.ComponentID = &component.ComponentID
+		delete(sp.Labels, legacyComponentLabel)
+	}
+	s.mu.Unlock()
+	fmt.Fprintf(s.Out, "  %s: %d spaces seeded before v0.8 now name the Component entity\n", cm.Name, len(legacy))
+	return nil
 }
 
 // classFunctions applies the component's perClass function calls to one class
@@ -280,5 +356,3 @@ func fnsHashAny(v any) string {
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:8])
 }
-
-var _ = uuid.Nil
