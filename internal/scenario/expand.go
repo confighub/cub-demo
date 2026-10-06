@@ -84,7 +84,7 @@ type StorySelection struct {
 
 // Totals are the entity counts "up" will produce.
 type Totals struct {
-	Clusters, Targets, Workers                 int
+	Clusters, Targets, Components              int
 	Spaces, RootBases, ClassBases, Deployments int
 	Units, Links, Releases                     int
 	// FunctionCalls is the number of InvokeFunctionsOnOrg requests the
@@ -380,7 +380,7 @@ func selectStory(st Story, comps []*ComponentModel) StorySelection {
 }
 
 func total(m *Model) Totals {
-	t := Totals{Clusters: len(m.Clusters), Targets: len(m.Clusters), Workers: 1}
+	t := Totals{Clusters: len(m.Clusters), Targets: len(m.Clusters), Components: len(m.Components)}
 	for _, c := range m.Components {
 		units := len(c.Units)
 		variants := len(c.ClassBases) + len(c.Deployments)

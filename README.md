@@ -6,7 +6,7 @@ clusters across 8 regions, 4 environment classes and 3 departments; a platform c
 catalog (cert-manager, traefik, kube-prometheus-stack, …) deployed across the fleet; 11
 business workloads placed sparsely by department; their cloud resources as Crossplane managed
 resources; releases, Argo-style live status with believable failures; and change workflows with
-rollouts in flight. Nothing is provisioned — clusters are Targets on a server-hosted worker.
+rollouts in flight. Nothing is provisioned — a cluster is a Target with nothing behind it.
 
 It also doubles as a scale test of ConfigHub itself.
 
@@ -20,9 +20,10 @@ cub demo version
 `cub plugin upgrade demo` picks up new releases. To work from source instead:
 `make plugin` builds and installs the local build in place.
 
-The tool shells out to `cub` for a few operations and pairs with recent server behavior;
-use a current `cub` (v0.4.16+) against a current server (v0.4.15+, where change workflows
-are entities).
+The tool pairs with recent server behavior: it needs a server at v0.8.4 or later (Component
+entities, live status on Releases, worker-less Targets) and a `cub` of the same minor version,
+which plays shell out to. An org seeded by an earlier version of the tool converges to the
+current data model on the next `cub demo up`.
 
 ## Seed an org
 
@@ -59,17 +60,19 @@ carries the `DemoName=<scenario>` label, which is also the teardown key.
 ## A short tour of the seeded org
 
 - **The fleet**: `cub space list --where "Labels.DemoName = 'meridian' AND Labels.Layer = 'cluster'"`,
-  or filter targets by facts: `cub target list --space '*' --where "Facts.Cluster.KubernetesVersion = '1.32'"`.
-- **Components**: `cub component list` — 19 components, each a tree of root base → class bases
-  (dev/test/uat/prod policy applied as real revisions) → per-cluster deployments. Open one in
-  the UI for the flow graph with live-status chips.
+  or filter targets by facts: `cub target list --where "Facts.Cluster.KubernetesVersion = '1.32'"`.
+- **Components**: `cub component list` — 19 Component entities, each a tree of root base →
+  class bases (dev/test/uat/prod policy applied as real revisions) → per-cluster deployments;
+  `cub space list --component cert-manager` lists one tree. Open one in the UI for the flow
+  graph with live-status chips.
 - **Sparse placement**: `payment-gateway` runs on 19 clusters, `fraud-scoring` on 14; payments
   never lands on retail clusters or in South America.
 - **Cloud resources**: RDS/S3/SQS/ElastiCache as Crossplane units next to their workloads, with
   per-deployment `spec.forProvider.region` and per-class instance classes.
-- **Live status**: Argo vocabulary on every deployment, with a few Degraded / OutOfSync /
+- **Live status**: Argo vocabulary on the latest Release of every deployment
+  (`cub release list --space cert-manager-us-east-prod2`), with a few Degraded / OutOfSync /
   Progressing exceptions and deliberately unreleased spaces
-  (`cub unit list --space '*' --view meridian-platform/meridian-never-released`).
+  (`cub unit list --view meridian-platform/meridian-never-released`).
 - **Rollouts**: three change orders in flight — `cert-manager-1-17-0` ready to advance to uat,
   `shipment-tracker-6-5-0` blocked at prod by a degraded uat variant, `kyverno-pinned-digests`
   fully released. `cub changeorder get cert-manager-1-17-0 --space cert-manager-base`.

@@ -37,7 +37,7 @@ func (s *Seeder) StoreBundle() error {
 		return nil
 	}
 	sp, _, err := s.ensureSpace(slug, s.Model.Scenario.Company+" scenario",
-		s.baseLabels(map[string]string{"Layer": "demo"}))
+		s.baseLabels(map[string]string{"Layer": "demo"}), nil)
 	if err != nil {
 		return err
 	}

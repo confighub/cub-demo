@@ -6,7 +6,7 @@
 // and beats live in the scenario file, never here.
 //
 // Every primitive reads its nouns from the scenario the caller selected: a
-// component's base space, its workflow unit, its deployments. The one
+// component's base space, its workflow, its deployments. The one
 // convention relied on is the seeder's: a component has at most one change
 // order in flight, so "the rollout for catalog-api" is a lookup, not a flag.
 package present
@@ -36,11 +36,11 @@ type Presenter struct {
 	DryRun bool
 }
 
-// Selector picks deployment spaces. Component and Variants are label
-// selectors. Stage is a workflow fact and needs a change order to resolve —
-// found from Component, or named with ChangeOrder as space/slug — because a
-// ChangeWorkflow unit is not bound to a component: the component is the change
-// order's, from the space it lives in. Selectors intersect; an empty selector
+// Selector picks deployment spaces. Component names a Component entity and
+// Variants is a label selector. Stage is a workflow fact and needs a change
+// order to resolve — found from Component, or named with ChangeOrder as
+// space/slug — because a ChangeWorkflow is not bound to a component: the
+// component is the change order's, from the space it lives in. Selectors intersect; an empty selector
 // is every deployment space of the scenario.
 type Selector struct {
 	Component   string
@@ -78,7 +78,7 @@ func (p *Presenter) Resolve(sel Selector) ([]*goclient.Space, *Rollout, error) {
 		if _, err := p.component(sel.Component); err != nil {
 			return nil, nil, err
 		}
-		where += fmt.Sprintf(" AND Labels.Component = '%s'", sel.Component)
+		where += fmt.Sprintf(" AND Component.Slug = '%s'", sel.Component)
 	}
 	if len(sel.Variants) > 0 {
 		where += fmt.Sprintf(" AND Labels.Variant IN (%s)", quoteList(sel.Variants))

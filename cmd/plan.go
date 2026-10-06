@@ -219,13 +219,13 @@ func printPlan(w io.Writer, m *scenario.Model, verbose bool) {
 	fmt.Fprintf(tw, "  spaces\t%d\t(1 home + %d clusters + %d root bases + %d class bases + %d deployments)\n",
 		t.Spaces, t.Clusters, t.RootBases, t.ClassBases, t.Deployments)
 	fmt.Fprintf(tw, "  targets\t%d\n", t.Targets)
-	fmt.Fprintf(tw, "  workers\t%d\n", t.Workers)
+	fmt.Fprintf(tw, "  components\t%d\n", t.Components)
 	fmt.Fprintf(tw, "  units\t%d\n", t.Units)
 	fmt.Fprintf(tw, "  links\t%d\n", t.Links)
 	fmt.Fprintf(tw, "  releases\t%d\n", t.Releases)
 	fmt.Fprintf(tw, "  function calls\t%d\n", t.FunctionCalls)
 	tw.Flush()
-	fmt.Fprintf(w, "\nDefault org quotas are 100 spaces, 250 targets and workers, 1000 units and links;\n"+
+	fmt.Fprintf(w, "\nDefault org quotas are 100 spaces, 250 targets, 1000 units and links;\n"+
 		"raise them on the server with 'confighub admin quota set' before 'cub demo up'.\n")
 
 	if !verbose {

@@ -35,12 +35,11 @@ type Seeder struct {
 	Out         io.Writer
 
 	mu sync.Mutex
-	// workerID is resolved by the home phase (or lazily by clusters) and used
-	// for every cluster target.
-	workerID uuid.UUID
 	// spaces is the index of existing demo spaces by slug, loaded at the start
 	// of Run and updated as spaces are created.
 	spaces map[string]*goclient.Space
+	// components is the index of the demo's Component entities by slug.
+	components map[string]*goclient.Component
 }
 
 // Run executes the named phases in canonical order (an empty list means all).
@@ -90,7 +89,7 @@ func (s *Seeder) Run(phases []string) error {
 	return nil
 }
 
-// loadIndex fetches every existing space of this demo.
+// loadIndex fetches every existing space and Component of this demo.
 func (s *Seeder) loadIndex() error {
 	spaces, err := s.Client.ListSpaces(demoWhere(s.Model))
 	if err != nil {
@@ -99,6 +98,14 @@ func (s *Seeder) loadIndex() error {
 	s.spaces = map[string]*goclient.Space{}
 	for _, sp := range spaces {
 		s.spaces[sp.Slug] = sp
+	}
+	components, err := s.Client.ListComponents(demoWhere(s.Model))
+	if err != nil {
+		return fmt.Errorf("index existing components (this version of cub-demo needs a ConfigHub server at v0.8.4 or later): %w", err)
+	}
+	s.components = map[string]*goclient.Component{}
+	for _, c := range components {
+		s.components[c.Slug] = c
 	}
 	return nil
 }
@@ -113,21 +120,29 @@ func (s *Seeder) space(slug string) *goclient.Space {
 	return s.spaces[slug]
 }
 
+// component returns the demo's Component entity with the slug, or nil.
+func (s *Seeder) component(slug string) *goclient.Component {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.components[slug]
+}
+
 func (s *Seeder) remember(sp *goclient.Space) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.spaces[sp.Slug] = sp
 }
 
-// ensureSpace creates the space if the index does not have it.
-func (s *Seeder) ensureSpace(slug, display string, labels map[string]string) (*goclient.Space, bool, error) {
+// ensureSpace creates the space if the index does not have it. componentID,
+// when given, makes the space a variant of that Component.
+func (s *Seeder) ensureSpace(slug, display string, labels map[string]string, componentID *uuid.UUID) (*goclient.Space, bool, error) {
 	if sp := s.space(slug); sp != nil {
 		return sp, false, nil
 	}
 	if s.DryRun {
 		return nil, true, nil
 	}
-	sp, err := s.Client.EnsureSpace(goclient.Space{Slug: slug, DisplayName: display, Labels: labels})
+	sp, err := s.Client.EnsureSpace(goclient.Space{Slug: slug, DisplayName: display, Labels: labels, ComponentID: componentID})
 	if err != nil {
 		return nil, false, err
 	}
@@ -213,5 +228,3 @@ func describeOwner(owner string) string {
 	}
 	return "scenario " + strconv.Quote(owner)
 }
-
-var uuidNil = uuid.Nil
