@@ -238,7 +238,13 @@ func (s *Seeder) ensureComponent(cm *scenario.ComponentModel) (*goclient.Compone
 		if fresh == nil {
 			return nil, fmt.Errorf("component %q vanished after create", cm.Name)
 		}
-		if owner := fresh.Labels[LabelDemoName]; owner != s.Model.Scenario.Name {
+		switch owner := fresh.Labels[LabelDemoName]; {
+		case owner == s.Model.Scenario.Name:
+		case owner == "":
+			if err := s.adoptComponent(cm, fresh, labels); err != nil {
+				return nil, err
+			}
+		default:
 			return nil, fmt.Errorf("component %q already exists and belongs to %s, not scenario %q; pick non-colliding names", cm.Name, describeOwner(owner), s.Model.Scenario.Name)
 		}
 		component = fresh
@@ -247,6 +253,31 @@ func (s *Seeder) ensureComponent(cm *scenario.ComponentModel) (*goclient.Compone
 		s.mu.Unlock()
 	}
 	return component, s.adoptLegacySpaces(cm, component)
+}
+
+// adoptComponent labels a Component that carries no demo label as this
+// demo's. The server created one such Component per Component label when
+// Components became entities, so an org seeded before v0.8 holds exactly the
+// Components the scenario would create, unlabeled; a Component created by hand
+// could look the same. Either is adopted only while no space outside this
+// demo names it, which is what tells the two apart.
+func (s *Seeder) adoptComponent(cm *scenario.ComponentModel, component *goclient.Component, labels map[string]string) error {
+	spaces, err := s.Client.ListSpaces(fmt.Sprintf("ComponentID = '%s'", component.ComponentID))
+	if err != nil {
+		return err
+	}
+	for _, sp := range spaces {
+		if sp.Labels[LabelDemoName] != s.Model.Scenario.Name {
+			return fmt.Errorf("component %q already exists and space %q names it without belonging to scenario %q; pick non-colliding names", cm.Name, sp.Slug, s.Model.Scenario.Name)
+		}
+	}
+	patch, _ := json.Marshal(map[string]any{"Labels": labels})
+	if err := s.Client.PatchComponent(component.ComponentID, patch); err != nil {
+		return fmt.Errorf("adopt component %q: %w", cm.Name, err)
+	}
+	component.Labels = labels
+	fmt.Fprintf(s.Out, "  adopted component %s, which the server created from the label its spaces carried before v0.8\n", cm.Name)
+	return nil
 }
 
 // legacyComponentLabel is the Space label that named a space's component
