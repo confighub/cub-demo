@@ -206,10 +206,13 @@ org-wide `where` the tool issues includes that label, so nothing outside the dem
    released for the change order; legacy per-component workflow entities converge away (kept
    only while a change order still moves under one).
 
-**An org seeded before v0.8 converges on the next `up`.** The bases phase creates the
-Component entities and moves each component's Spaces from the old `Component` label to
-`ComponentID`; the status phase reports on Releases and clears the old live-status Space
-annotation. The server-hosted worker an old seeding left in the home Space is unused and goes
+**An org seeded before v0.8 converges on the next `up`.** The server's v0.8 migration already
+created one unlabeled Component per `Component` label and pointed the Spaces at it, leaving
+the label in place. The bases phase adopts such a Component (labels it as the demo's) when no
+space outside the demo names it, creates any that are missing, and moves each component's
+Spaces off the old label; the status phase reports on Releases and clears the old live-status
+Space annotation. A `down` run before that first `up` leaves the unlabeled Components behind,
+since teardown deletes only what carries the demo label; the next `up` adopts them. The server-hosted worker an old seeding left in the home Space is unused and goes
 with the home Space on `down`.
 
 **Slugs are org-global and scenarios must not collide.** The seeder refuses to adopt a space

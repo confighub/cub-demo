@@ -1,6 +1,7 @@
 package cubclient
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -56,6 +57,16 @@ func (c *Client) EnsureComponent(component goclient.Component) (*goclient.Compon
 		return nil, fmt.Errorf("create component %q: %s", component.Slug, res.Status())
 	}
 	return res.JSON200, nil
+}
+
+// PatchComponent applies a merge patch to a Component.
+func (c *Client) PatchComponent(componentID uuid.UUID, patch []byte) error {
+	res, err := c.api.PatchComponentWithBodyWithResponse(c.ctx, componentID, &goclient.PatchComponentParams{},
+		mergePatch, bytes.NewReader(patch))
+	if cubapi.IsAPIError(err, res) {
+		return cubapi.InterpretErrorGeneric(err, res)
+	}
+	return nil
 }
 
 // DeleteComponent deletes a Component. The server refuses while a Space
