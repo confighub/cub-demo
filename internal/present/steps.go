@@ -140,6 +140,7 @@ func stepInvoke(p *Presenter, vars map[string]string, with params) error {
 	if d := with.str("change-desc"); d != "" {
 		args = append(args, "--change-desc", d)
 	}
+	args = append(args, p.changeFlags()...)
 	args = append(append(args, "--", fn), with.list("args")...)
 	return p.runCub(args)
 }
@@ -176,8 +177,9 @@ func stepBumpImage(p *Presenter, vars map[string]string, with params) error {
 		desc = fmt.Sprintf("%s %s", cm.Name, version)
 	}
 	fmt.Fprintf(p.Out, "%s runs %s; shipping %s\n", cm.Name, current, version)
-	err = p.runCub([]string{"function", "set", "--space", cm.RootSpace, "--unit", rel.Unit,
-		"--change-desc", desc, "--", "set-image-reference", rel.Container, ":" + version})
+	args := []string{"function", "set", "--space", cm.RootSpace, "--unit", rel.Unit, "--change-desc", desc}
+	args = append(args, p.changeFlags()...)
+	err = p.runCub(append(args, "--", "set-image-reference", rel.Container, ":"+version))
 	if err != nil {
 		return err
 	}
@@ -233,7 +235,7 @@ func (p *Presenter) runCub(args []string) error {
 	if p.DryRun {
 		return nil
 	}
-	out, err := cubexec.Run(args...)
+	out, err := cubexec.RunIn(p.Context, args...)
 	if err != nil {
 		return err
 	}

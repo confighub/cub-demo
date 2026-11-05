@@ -3,6 +3,8 @@ units:
   - {slug: controller, file: controller.yaml}
   - {slug: ingress-class, file: ingress-class.yaml}
   - {slug: middleware, file: middleware.yaml}
+# What the bump-image primitive bumps for traefik.
+release: {unit: controller, container: traefik}
 values:
   version: v3.2.1
 perClass:

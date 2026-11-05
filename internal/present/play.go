@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -53,6 +54,29 @@ func (c PlayContext) PreviousVersion() (string, error) { return c.varNamed("Prev
 
 // Var reads any exported variable by name, for vocabulary future primitives add.
 func (c PlayContext) Var(name string) (string, error) { return c.varNamed(name) }
+
+// Pick chooses one of a comma-separated list by the Cycle variable the agent
+// runner exports, so an agent's change can differ from one cycle to the next:
+// {{.Pick "768Mi,1Gi,1536Mi"}} is 768Mi on the first cycle, 1Gi on the
+// second, and round again after the last.
+func (c PlayContext) Pick(list string) (string, error) {
+	items := strings.Split(list, ",")
+	if len(items) == 0 || list == "" {
+		return "", fmt.Errorf("Pick: an empty list")
+	}
+	cycle, err := c.varNamed("Cycle")
+	if err != nil {
+		return "", err
+	}
+	n, err := strconv.Atoi(cycle)
+	if err != nil {
+		return "", fmt.Errorf("Pick: Cycle %q is not a number", cycle)
+	}
+	if n < 1 {
+		n = 1
+	}
+	return strings.TrimSpace(items[(n-1)%len(items)]), nil
+}
 
 func (c PlayContext) varNamed(name string) (string, error) {
 	if v, ok := c.vars[name]; ok {
@@ -127,8 +151,17 @@ func (p *Presenter) Play(name string) error {
 	if !ok {
 		return fmt.Errorf("scenario %s declares no play %q (have: %s)", p.Model.Name(), name, strings.Join(p.Plays(), ", "))
 	}
+	return p.RunSteps(name, steps)
+}
+
+// RunSteps runs a step list as Play runs a named play's; an agent's change is
+// one. name labels errors.
+func (p *Presenter) RunSteps(name string, steps []scenario.PlayStep) error {
 	ctx := PlayContext{Scenario: p.Model.Scenario, Home: p.Model.Home, Context: p.Model.Scenario.Context, model: p.Model}
 	vars := map[string]string{}
+	for k, v := range p.Vars {
+		vars[k] = v
+	}
 	for i, st := range steps {
 		if st.Run != "" {
 			line, err := ctx.render(st.Run, vars)
@@ -140,7 +173,11 @@ func (p *Presenter) Play(name string) error {
 				continue
 			}
 			cmd := exec.Command("sh", "-c", line)
-			cmd.Env = append(os.Environ(), "CUB_CONTEXT="+p.Model.Scenario.Context,
+			cubContext := p.Model.Scenario.Context
+			if p.Context != "" {
+				cubContext = p.Context
+			}
+			cmd.Env = append(os.Environ(), "CUB_CONTEXT="+cubContext,
 				"CONFIGHUB_AGENT=1", DemoEnv+"="+p.Model.Name())
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr

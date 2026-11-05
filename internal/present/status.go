@@ -19,6 +19,25 @@ func (p *Presenter) latestReleases(spaces []*goclient.Space) (map[uuid.UUID]*goc
 	return p.Client.LatestReleases(fmt.Sprintf("SpaceID IN (%s)", quoteList(ids)))
 }
 
+// ReleasedUnder reports which of the spaces have a latest Release published
+// for the change order, so a rollout picked up midway releases nothing twice.
+func (p *Presenter) ReleasedUnder(spaces []*goclient.Space, changeOrderID uuid.UUID) (map[uuid.UUID]bool, error) {
+	if len(spaces) == 0 {
+		return nil, nil
+	}
+	latest, err := p.latestReleases(spaces)
+	if err != nil {
+		return nil, err
+	}
+	released := map[uuid.UUID]bool{}
+	for id, rel := range latest {
+		if rel != nil && rel.ChangeOrderID != nil && *rel.ChangeOrderID == changeOrderID {
+			released[id] = true
+		}
+	}
+	return released, nil
+}
+
 // Argobot plays the delivery system: for every selected deployment space
 // whose latest Release nobody has reported on, it writes the LiveStatus
 // argobot would write after a successful sync. A Release already reported on

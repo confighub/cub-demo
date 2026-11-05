@@ -34,6 +34,31 @@ type Presenter struct {
 	Model  *scenario.Model
 	Out    io.Writer
 	DryRun bool
+	// Context is the cub context the cub commands of a play run in; empty is
+	// the session's. An agent runs its steps in a context of its own.
+	Context string
+	// ChangeSet, when set, is the ChangeSet every change-making step writes
+	// inside, as space/slug, and Clearance the guarded reasons those writes
+	// are cleared for, each as KEY=VALUE. Both are the agent runner's.
+	ChangeSet string
+	Clearance []string
+	// Vars seeds the variables a step list starts with, as a primitive would
+	// have exported them: the agent runner sets Cycle to the agent's cycle
+	// number, so a change can vary from one cycle to the next.
+	Vars map[string]string
+}
+
+// changeFlags are the flags a change-making cub command carries when the
+// presenter writes inside a ChangeSet or under a clearance.
+func (p *Presenter) changeFlags() []string {
+	var flags []string
+	if p.ChangeSet != "" {
+		flags = append(flags, "--changeset", p.ChangeSet)
+	}
+	for _, c := range p.Clearance {
+		flags = append(flags, "--clearance", c)
+	}
+	return flags
 }
 
 // Selector picks deployment spaces. Component names a Component entity and

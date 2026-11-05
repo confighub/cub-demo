@@ -14,8 +14,18 @@ import (
 // Run executes cub with the given arguments, returning its combined output.
 // CONFIGHUB_AGENT=1 keeps the output terse and machine-friendly.
 func Run(args ...string) (string, error) {
+	return RunIn("", args...)
+}
+
+// RunIn executes cub as Run does, in the named cub context: an agent acts as
+// its own identity, which is a context of its own. The empty context is the
+// session's.
+func RunIn(context string, args ...string) (string, error) {
 	cmd := exec.Command("cub", args...)
 	cmd.Env = append(os.Environ(), "CONFIGHUB_AGENT=1")
+	if context != "" {
+		cmd.Env = append(cmd.Env, "CUB_CONTEXT="+context)
+	}
 	out, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	if err != nil {

@@ -239,6 +239,57 @@ The primitives, with their `with:` parameters (unknown keys are rejected, naming
 Write plays so they run twice without a teardown: derive slugs from bumped versions rather
 than hard-coding them, and let `observe` defaults heal what an incident play painted.
 
+## Agents
+
+`agents:` declares autonomous actors, run with `cub demo agents run` after `cub demo agents
+up` has created their service accounts and cub contexts (named `<demo>-agent-<name>`). Each
+agent repeats a cycle: open a ChangeSet on its component's root base, run `change:` inside it,
+close it, and with `rollout: true` roll the closed change out as a change order, releasing and
+promoting stage by stage. `workflows.review` seeds the workflow under which a person has to
+approve a change before its ChangeSet closes, and may name the components that require it:
+
+```yaml
+workflows:
+  review:
+    components: [catalog-api]   # a ChangeSet on catalog-api closes only with an approval from someone who did not write the change
+agents:
+  - name: capacity
+    component: catalog-api      # requires review: this agent waits for a person
+    every: 70s
+    rollout: true
+    change:
+      - call: invoke
+        with: {space: '{{.Base "catalog-api"}}', unit: api, function: set-string-path,
+               args: [apps/v1/Deployment, spec.template.spec.containers.0.resources.limits.memory, '{{.Pick "768Mi,1Gi"}}']}
+  - name: argobot           # no component: a tick agent, runs its steps every interval
+    every: 15s
+    change:
+      - call: observe
+        with: {when: release-newer}
+```
+
+The seeder sets each component under `workflows.review.components` to require a ChangeWorkflow
+and to allow `change-review` and its rollout workflow, so the server refuses a ChangeSet on it
+that names neither. Leave `components:` out to have the rule arrive during the demo, from a
+play:
+
+```yaml
+plays:
+  catalog-api-needs-review:
+    - run: cub component update --patch catalog-api --change-workflow-required --allowed-change-workflow {{.Home}}/change-review --allowed-change-workflow {{.Workflow "catalog-api"}}
+```
+
+An agent reads its Component at the start of every cycle. Where a workflow is required it opens
+its ChangeSet under `change-review`; anywhere else it opens it under no workflow and closes it
+with nobody asked. Once a component requires a workflow, promoting or releasing it also needs a
+change order that has one, which is how the plays and agents already roll out.
+
+`change:` steps are play steps; `{{.Pick "a,b,c"}}` picks by the agent's cycle number, so a
+change differs from one cycle to the next. An agent that writes a guarded field lists the
+reasons it is cleared for under `clearance:` (each as `KEY=VALUE`). `cub demo agents run --once` makes one move per agent and stops, for
+rehearsing a beat at a time; `--reviewer` is who a refused ChangeSet is handed to (default:
+the active context's user).
+
 ## Checking your work
 
 - `cub demo plan <file>` — offline expansion: cluster table, component × class matrix, entity

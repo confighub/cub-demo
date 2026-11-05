@@ -189,3 +189,43 @@ func TestLoadFromFilesRoundTrip(t *testing.T) {
 		t.Error("a bundle without scenario.yaml should fail")
 	}
 }
+
+func TestValidateAgents(t *testing.T) {
+	base := func() *Scenario {
+		return &Scenario{
+			Name:      "t",
+			Regions:   []Region{{Name: "r"}},
+			Classes:   []Class{{Name: "dev"}},
+			Catalog:   []Component{{Name: "web", Dir: "catalog/web"}},
+			Workflows: Workflows{Review: &ReviewWorkflow{Components: []string{"web"}}},
+			Agents: []Agent{{Name: "ci", Component: "web", Every: "30s", Rollout: true,
+				Change: []PlayStep{{Call: "bump-image", With: map[string]any{"component": "web"}}}}},
+		}
+	}
+	if err := base().validateAgents(); err != nil {
+		t.Fatalf("valid agents refused: %v", err)
+	}
+	for name, edit := range map[string]func(s *Scenario){
+		"bad interval":          func(s *Scenario) { s.Agents[0].Every = "soon" },
+		"no interval":           func(s *Scenario) { s.Agents[0].Every = "" },
+		"unknown component":     func(s *Scenario) { s.Agents[0].Component = "nope" },
+		"rollout without base":  func(s *Scenario) { s.Agents[0].Component = "" },
+		"no steps":              func(s *Scenario) { s.Agents[0].Change = nil },
+		"run and call":          func(s *Scenario) { s.Agents[0].Change[0].Run = "echo" },
+		"duplicate name":        func(s *Scenario) { s.Agents = append(s.Agents, s.Agents[0]) },
+		"review of the unknown": func(s *Scenario) { s.Workflows.Review.Components = []string{"nope"} },
+		"review listed twice":   func(s *Scenario) { s.Workflows.Review.Components = []string{"web", "web"} },
+		"review, no workflows":  func(s *Scenario) { s.Workflows.Disabled = true },
+	} {
+		s := base()
+		edit(s)
+		if err := s.validateAgents(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	s := base()
+	s.Workflows.Review = nil
+	if err := s.validateAgents(); err != nil {
+		t.Errorf("agents need no review workflow: %v", err)
+	}
+}

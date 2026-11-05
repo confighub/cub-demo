@@ -44,6 +44,8 @@ cub demo install meridian      # store the definition in the org (a <name>-scena
 cub demo up                    # converge the org to the installed definition (idempotent; re-run to resume)
 cub demo status                # compare the org with the installed scenario
 cub demo down                  # delete everything the scenario created
+cub demo play [<play>]         # run one of the scenario's plays (presenting)
+cub demo agents up | run | down  # the scenario's autonomous agents: create their accounts, let them act, remove them
 ```
 
 The split mirrors ConfigHub's own model: `install` writes the demo's *desired state* into the
