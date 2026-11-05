@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -260,6 +261,9 @@ func (s *Scenario) validate() error {
 	if err := checkSlug("name", s.Name); err != nil {
 		return err
 	}
+	if err := s.validateAgents(); err != nil {
+		return err
+	}
 	if len(s.Regions) == 0 || len(s.Classes) == 0 {
 		return fmt.Errorf("at least one region and one class are required")
 	}
@@ -448,6 +452,70 @@ func (spec *ComponentSpec) validate(c Component) error {
 			return fmt.Errorf("external resource %q collides with a unit slug", e.Name)
 		}
 		seen[e.Name] = true
+	}
+	return nil
+}
+
+// validateAgents checks the agents' names, intervals and components.
+func (s *Scenario) validateAgents() error {
+	components := map[string]bool{}
+	for _, c := range s.AllComponents() {
+		components[c.Name] = true
+	}
+	names := map[string]bool{}
+	for i, a := range s.Agents {
+		if err := checkSlug(fmt.Sprintf("agents[%d].name", i), a.Name); err != nil {
+			return err
+		}
+		if names[a.Name] {
+			return fmt.Errorf("duplicate agent %q", a.Name)
+		}
+		names[a.Name] = true
+		if a.Every == "" {
+			return fmt.Errorf("agent %q: every is required (a duration such as 45s)", a.Name)
+		}
+		if d, err := time.ParseDuration(a.Every); err != nil || d <= 0 {
+			return fmt.Errorf("agent %q: every %q is not a positive duration", a.Name, a.Every)
+		}
+		if a.Component != "" && !components[a.Component] {
+			return fmt.Errorf("agent %q: unknown component %q", a.Name, a.Component)
+		}
+		if a.Component == "" && a.Rollout {
+			return fmt.Errorf("agent %q: rollout needs a component", a.Name)
+		}
+		if len(a.Change) == 0 {
+			return fmt.Errorf("agent %q: change lists no steps", a.Name)
+		}
+		for j, st := range a.Change {
+			if (st.Run == "") == (st.Call == "") {
+				return fmt.Errorf("agent %q change[%d]: exactly one of run or call is required", a.Name, j)
+			}
+		}
+	}
+	if review := s.Workflows.Review; review != nil {
+		seen := map[string]bool{}
+		for _, c := range review.Components {
+			if !components[c] {
+				return fmt.Errorf("workflows.review: unknown component %q", c)
+			}
+			if seen[c] {
+				return fmt.Errorf("workflows.review: component %q is listed twice", c)
+			}
+			seen[c] = true
+		}
+		named := map[string]bool{}
+		for _, r := range review.Reviewers {
+			if strings.TrimSpace(r) == "" {
+				return fmt.Errorf("workflows.review: a reviewer is empty")
+			}
+			if named[r] {
+				return fmt.Errorf("workflows.review: reviewer %q is listed twice", r)
+			}
+			named[r] = true
+		}
+		if s.Workflows.Disabled {
+			return fmt.Errorf("workflows.review needs workflows, which the scenario disables")
+		}
 	}
 	return nil
 }

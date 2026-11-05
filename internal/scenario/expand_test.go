@@ -1,6 +1,7 @@
 package scenario
 
 import (
+	"encoding/json"
 	"os"
 	"reflect"
 	"testing"
@@ -187,5 +188,76 @@ func TestLoadFromFilesRoundTrip(t *testing.T) {
 	}
 	if _, err := LoadFromFiles("x", map[string][]byte{}); err == nil {
 		t.Error("a bundle without scenario.yaml should fail")
+	}
+}
+
+func TestValidateAgents(t *testing.T) {
+	base := func() *Scenario {
+		return &Scenario{
+			Name:      "t",
+			Regions:   []Region{{Name: "r"}},
+			Classes:   []Class{{Name: "dev"}},
+			Catalog:   []Component{{Name: "web", Dir: "catalog/web"}},
+			Workflows: Workflows{Review: &ReviewWorkflow{Components: []string{"web"}}},
+			Agents: []Agent{{Name: "ci", Component: "web", Every: "30s", Rollout: true,
+				Change: []PlayStep{{Call: "bump-image", With: map[string]any{"component": "web"}}}}},
+		}
+	}
+	if err := base().validateAgents(); err != nil {
+		t.Fatalf("valid agents refused: %v", err)
+	}
+	for name, edit := range map[string]func(s *Scenario){
+		"bad interval":          func(s *Scenario) { s.Agents[0].Every = "soon" },
+		"no interval":           func(s *Scenario) { s.Agents[0].Every = "" },
+		"unknown component":     func(s *Scenario) { s.Agents[0].Component = "nope" },
+		"rollout without base":  func(s *Scenario) { s.Agents[0].Component = "" },
+		"no steps":              func(s *Scenario) { s.Agents[0].Change = nil },
+		"run and call":          func(s *Scenario) { s.Agents[0].Change[0].Run = "echo" },
+		"duplicate name":        func(s *Scenario) { s.Agents = append(s.Agents, s.Agents[0]) },
+		"review of the unknown": func(s *Scenario) { s.Workflows.Review.Components = []string{"nope"} },
+		"review listed twice":   func(s *Scenario) { s.Workflows.Review.Components = []string{"web", "web"} },
+		"reviewer twice":        func(s *Scenario) { s.Workflows.Review.Reviewers = []string{"ada", "ada"} },
+		"empty reviewer":        func(s *Scenario) { s.Workflows.Review.Reviewers = []string{" "} },
+		"review, no workflows":  func(s *Scenario) { s.Workflows.Disabled = true },
+	} {
+		s := base()
+		edit(s)
+		if err := s.validateAgents(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	s := base()
+	s.Workflows.Review = nil
+	if err := s.validateAgents(); err != nil {
+		t.Errorf("agents need no review workflow: %v", err)
+	}
+}
+
+func TestReviewWorkflowJSON(t *testing.T) {
+	m := &Model{Scenario: &Scenario{}}
+	if m.ReviewWorkflowJSON(nil) != nil {
+		t.Fatal("a scenario without workflows.review renders a review workflow")
+	}
+	m.Scenario.Workflows.Review = &ReviewWorkflow{}
+	var wf struct {
+		Stages                   []any
+		Final                    struct{ Prerequisites []string }
+		AttestationPrerequisites []struct {
+			Name        string
+			FromUserIDs []string
+		}
+	}
+	if err := json.Unmarshal(m.ReviewWorkflowJSON([]string{"b", "a"}), &wf); err != nil {
+		t.Fatal(err)
+	}
+	if len(wf.Stages) != 0 || len(wf.Final.Prerequisites) != 1 || wf.Final.Prerequisites[0] != ReviewRequirementName {
+		t.Errorf("want no stages and Final gating on %s, got %+v", ReviewRequirementName, wf)
+	}
+	if len(wf.AttestationPrerequisites) != 1 || wf.AttestationPrerequisites[0].Name != ReviewRequirementName {
+		t.Fatalf("want one requirement named %s, got %+v", ReviewRequirementName, wf.AttestationPrerequisites)
+	}
+	// Sorted, so the definition's hash does not depend on the order reviewers are listed in.
+	if got := wf.AttestationPrerequisites[0].FromUserIDs; len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Errorf("want the reviewers' IDs sorted, got %v", got)
 	}
 }

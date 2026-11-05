@@ -160,6 +160,54 @@ lets demo content live outside this repo entirely: the internal change-workflows
 scenario file maintained elsewhere and installed by path, riding the embedded component
 directories.
 
+## Agents
+
+A scenario may declare **agents**: autonomous actors that keep making changes while the
+audience watches, the backdrop of operations where most change arrives from automation. Each
+agent is a service account of its own, acting in a cub context of its own, so every ChangeSet,
+change order and Release it makes is attributed to it, and a person's approval is from someone
+who did not write the change. `cub demo agents up` creates the accounts, registers a key for
+each on this machine and signs its context in; `cub demo agents run` lets them act; `down`
+removes them.
+
+An agent's move is a fixed lifecycle around steps the scenario writes with the same primitives
+as plays. Every cycle it opens a ChangeSet on its component's root base, under the scenario's
+**review workflow** where the component requires a ChangeWorkflow, runs its `change:` steps inside it
+(writing under its `clearance:`, if the scenario gives it one for a guarded field), and tries
+to close it. Three things can then happen, and they are the demo:
+
+- The workflow lets the ChangeSet close. With `rollout: true` the agent names it as a change
+  order ending at the ChangeSet's end tag and, cycle after cycle, releases each stage it has
+  entered and promotes into the next, waiting where a gate holds (released, healthy) and saying
+  so.
+- The workflow refuses: the component requires review, and no reviewer has approved the
+  change. The agent asks the reviewer once, prints what the gate requires, and waits; a
+  person approves in the UI or with `cub variant approve`, and the agent closes the ChangeSet
+  on its next move.
+- The base is held by another ChangeSet. The agent waits, naming the ChangeSet, which is the
+  queue forming behind a change under review. A change to another component goes through.
+
+The review workflow is seeded from `workflows.review`: a stageless ChangeWorkflow,
+`change-review` in the home space, whose Final names one attestation requirement, an approval
+from a reviewer who did not write the change. The requirement names its reviewers by user ID:
+the usernames under `workflows.review.reviewers`, or the user who seeds the demo when the
+scenario lists none. An approval from anyone else is recorded and does not count, which is
+what keeps one agent from approving another's change. The rule belongs to the component: a Component
+that requires a ChangeWorkflow and allows two, `change-review` for ChangeSets and its rollout
+workflow for change orders. The server then refuses a ChangeSet on that component's units that
+names no workflow or another one, so an agent cannot skip the review by leaving the workflow
+off. The rule arrives one of two ways. `workflows.review.components` lists the components the
+seeder sets it on, for a demo that opens with it. A play that runs `cub component update` sets
+it mid-demo, for one where the rule arriving is a beat. Either way an agent reads its Component
+at the start of every cycle: where a workflow is required it opens its ChangeSet under
+`change-review`, and anywhere else under no workflow, which closes with nobody asked.
+
+An agent with no `component:` is a tick agent: it runs its steps every interval with no
+ChangeSet, which is how a delivery bot (`observe` with `when: release-newer`) keeps the healthy
+gates opening. The runner keeps no state of its own: on start it reads each agent's standing
+from the org, continuing an open ChangeSet of the agent's or its latest change order in flight,
+so a runner interrupted mid-demo picks up where the org stands.
+
 ## Multiple demos
 
 A demo is a scenario; orgs keep them apart. Three mechanisms make several demos safe and
@@ -259,6 +307,7 @@ disambiguates when one org holds several demos (plays export it to child command
 | `cub demo uninstall [--demo N] [--yes]` | yes | down, plus the `<name>-scenario` space: nothing remains |
 | `cub demo reset [--yes]` | yes | down + up: back to the opening state |
 | `cub demo play [<play>] [--dry-run]` | yes | run one of the scenario's plays |
+| `cub demo agents up \| run [--once] [--reviewer U] \| down [--yes]` | yes | create the scenario's agents' accounts and contexts, let them act, remove them |
 | `cub demo list` | yes | the demos installed in the org, by `DemoName` |
 | `cub demo scenario list \| show \| export` | no | inspect or copy the embedded scenarios |
 | `cub demo version` | no | |

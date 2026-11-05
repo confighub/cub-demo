@@ -44,6 +44,37 @@ type Scenario struct {
 	// actors and beats — its "ci" and "argobot" are plays here, not verbs of
 	// the tool.
 	Plays map[string][]PlayStep `yaml:"plays"`
+
+	// Agents are the scenario's autonomous actors, run with "cub demo agents
+	// run": each is a service account of its own that repeatedly makes a
+	// change to one component inside a ChangeSet, closes it when the
+	// component's review workflow lets it, and rolls it out. Their moves are
+	// composed from the same primitives as plays. See docs/DESIGN.md, Agents.
+	Agents []Agent `yaml:"agents"`
+}
+
+// Agent is one autonomous actor. Every cycle it opens a ChangeSet on
+// Component's root base, runs Change inside it, closes it (asking for a
+// review when the component's review workflow refuses), then, with Rollout, creates
+// a change order ending at the ChangeSet and promotes and releases it stage
+// by stage until a gate holds. An Agent without a Component is a tick agent:
+// it runs Change every interval with no ChangeSet, which is how a delivery
+// bot observes releases.
+type Agent struct {
+	Name string `yaml:"name"`
+	// Component is the component the agent changes; empty for a tick agent.
+	Component string `yaml:"component"`
+	// Every is how often the agent acts, as a duration such as 45s.
+	Every string `yaml:"every"`
+	// Clearance is the guarded reasons the agent's writes are cleared for,
+	// each as KEY=VALUE, passed to every change-making step and promotion.
+	Clearance []string `yaml:"clearance"`
+	// Description is the ChangeSet description, a template like a play line.
+	Description string `yaml:"description"`
+	// Change is the steps run inside the ChangeSet, as a play's steps.
+	Change []PlayStep `yaml:"change"`
+	// Rollout says whether a closed ChangeSet is rolled out as a change order.
+	Rollout bool `yaml:"rollout"`
 }
 
 // PlayStep is one step of a play: exactly one of Run (a shell line) or Call
@@ -210,6 +241,31 @@ type Workflows struct {
 	// no health.
 	Prerequisites map[string][]string `yaml:"prerequisites"`
 	ChangeOrders  []ChangeOrder       `yaml:"changeOrders"`
+	// Review declares the stageless ChangeWorkflow that governs ChangeSets on
+	// components that require a ChangeWorkflow: closing one needs an approval
+	// from someone who did not write the change. Absent, no review workflow
+	// is seeded.
+	Review *ReviewWorkflow `yaml:"review"`
+}
+
+// ReviewWorkflow is the ChangeSet workflow a scenario seeds as
+// "change-review" in the home space.
+type ReviewWorkflow struct {
+	// Components are the components whose changes need the review from the
+	// moment the demo is seeded. Each one's Component entity is set to require
+	// a ChangeWorkflow and to allow this one beside its rollout workflow, so
+	// the server refuses a ChangeSet on its units that names no workflow or
+	// another. Empty leaves the rule to a play, which is how a scenario makes
+	// the moment the rule arrives part of the demo.
+	Components []string `yaml:"components"`
+	// Reviewers are the usernames of the people whose approval counts. The
+	// requirement names them, so an approval from anyone else, another agent
+	// included, is recorded and does not close the ChangeSet. Empty names the
+	// user who seeds the demo. A reviewer's approval of a change they wrote
+	// does not count either, so list two where reviewers also write.
+	Reviewers []string `yaml:"reviewers"`
+	// Description says what the requirement is for, in the author's words.
+	Description string `yaml:"description"`
 }
 
 // ChangeOrder is an in-flight change to seed: a function applied to one root

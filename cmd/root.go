@@ -73,7 +73,7 @@ holds several demos, --demo says which one a verb operates on.`,
 	root.PersistentFlags().StringVar(&demoName, "demo", os.Getenv(present.DemoEnv),
 		"which installed demo to operate on; default: the one demo installed in the active org (or $"+present.DemoEnv+")")
 	root.AddCommand(newPlanCmd(), newInstallCmd(), newUpCmd(), newStatusCmd(), newDownCmd(), newResetCmd(), newUninstallCmd(), newListCmd(), newScenarioCmd(), newVersionCmd())
-	root.AddCommand(newPlayCmd())
+	root.AddCommand(newPlayCmd(), newAgentsCmd())
 	return root
 }
 

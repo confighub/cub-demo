@@ -3,6 +3,7 @@ package scenario
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -188,4 +189,47 @@ func (m *Model) WorkflowEntityJSON(def WorkflowDef) []byte {
 	}
 	raw, _ := json.MarshalIndent(e, "", "  ")
 	return raw
+}
+
+// ReviewWorkflowSlug is the stageless ChangeWorkflow ChangeSets on a
+// component that requires a ChangeWorkflow are opened under.
+const ReviewWorkflowSlug = "change-review"
+
+// ReviewRequirementName is the attestation requirement the review workflow's
+// Final gates on.
+const ReviewRequirementName = "change-reviewed"
+
+// ReviewWorkflowJSON renders the review workflow's ChangeWorkflow entity, or
+// nil when the scenario declares none: no stages, and one requirement on
+// closing, an approval from one of the reviewers, given as user IDs, who did
+// not write the change.
+func (m *Model) ReviewWorkflowJSON(reviewerIDs []string) []byte {
+	review := m.Scenario.Workflows.Review
+	if review == nil {
+		return nil
+	}
+	description := review.Description
+	if description == "" {
+		description = "a change is approved by a reviewer who did not write it before it leaves the base"
+	}
+	ids := slices.Clone(reviewerIDs)
+	slices.Sort(ids)
+	e := map[string]any{
+		"DisplayName": "Change review",
+		"Final":       map[string]any{"Prerequisites": []string{ReviewRequirementName}},
+		"AttestationPrerequisites": []any{map[string]any{
+			"Name":        ReviewRequirementName,
+			"FromUserIDs": ids,
+			"Description": description,
+		}},
+	}
+	raw, _ := json.MarshalIndent(e, "", "  ")
+	return raw
+}
+
+// ReviewRequired says whether the component is seeded requiring the review
+// workflow: whether workflows.review names it.
+func (m *Model) ReviewRequired(component string) bool {
+	review := m.Scenario.Workflows.Review
+	return review != nil && slices.Contains(review.Components, component)
 }
