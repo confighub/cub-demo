@@ -180,8 +180,8 @@ to close it. Three things can then happen, and they are the demo:
   order ending at the ChangeSet's end tag and, cycle after cycle, releases each stage it has
   entered and promotes into the next, waiting where a gate holds (released, healthy) and saying
   so.
-- The workflow refuses: the component requires review, and nobody but the agent has approved
-  the change. The agent asks the reviewer once, prints what the gate requires, and waits; a
+- The workflow refuses: the component requires review, and no reviewer has approved the
+  change. The agent asks the reviewer once, prints what the gate requires, and waits; a
   person approves in the UI or with `cub variant approve`, and the agent closes the ChangeSet
   on its next move.
 - The base is held by another ChangeSet. The agent waits, naming the ChangeSet, which is the
@@ -189,7 +189,10 @@ to close it. Three things can then happen, and they are the demo:
 
 The review workflow is seeded from `workflows.review`: a stageless ChangeWorkflow,
 `change-review` in the home space, whose Final names one attestation requirement, an approval
-from someone who did not write the change. The rule belongs to the component: a Component
+from a reviewer who did not write the change. The requirement names its reviewers by user ID:
+the usernames under `workflows.review.reviewers`, or the user who seeds the demo when the
+scenario lists none. An approval from anyone else is recorded and does not count, which is
+what keeps one agent from approving another's change. The rule belongs to the component: a Component
 that requires a ChangeWorkflow and allows two, `change-review` for ChangeSets and its rollout
 workflow for change orders. The server then refuses a ChangeSet on that component's units that
 names no workflow or another one, so an agent cannot skip the review by leaving the workflow

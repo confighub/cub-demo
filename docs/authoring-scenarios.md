@@ -245,13 +245,14 @@ than hard-coding them, and let `observe` defaults heal what an incident play pai
 up` has created their service accounts and cub contexts (named `<demo>-agent-<name>`). Each
 agent repeats a cycle: open a ChangeSet on its component's root base, run `change:` inside it,
 close it, and with `rollout: true` roll the closed change out as a change order, releasing and
-promoting stage by stage. `workflows.review` seeds the workflow under which a person has to
+promoting stage by stage. `workflows.review` seeds the workflow under which a reviewer has to
 approve a change before its ChangeSet closes, and may name the components that require it:
 
 ```yaml
 workflows:
   review:
-    components: [catalog-api]   # a ChangeSet on catalog-api closes only with an approval from someone who did not write the change
+    reviewers: [ada@example.com]   # usernames whose approval counts; default: the user who seeds the demo
+    components: [catalog-api]      # a ChangeSet on catalog-api closes only with a reviewer's approval
 agents:
   - name: capacity
     component: catalog-api      # requires review: this agent waits for a person
@@ -267,6 +268,10 @@ agents:
       - call: observe
         with: {when: release-newer}
 ```
+
+The requirement names its reviewers, so an approval from anyone else, another agent included,
+is recorded and does not close the ChangeSet. A reviewer's approval of a change they wrote
+does not count either, so list two where the reviewers also make changes.
 
 The seeder sets each component under `workflows.review.components` to require a ChangeWorkflow
 and to allow `change-review` and its rollout workflow, so the server refuses a ChangeSet on it
@@ -288,7 +293,7 @@ change order that has one, which is how the plays and agents already roll out.
 change differs from one cycle to the next. An agent that writes a guarded field lists the
 reasons it is cleared for under `clearance:` (each as `KEY=VALUE`). `cub demo agents run --once` makes one move per agent and stops, for
 rehearsing a beat at a time; `--reviewer` is who a refused ChangeSet is handed to (default:
-the active context's user).
+the scenario's reviewers, or the active context's user when it lists none).
 
 ## Checking your work
 

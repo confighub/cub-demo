@@ -258,6 +258,12 @@ type ReviewWorkflow struct {
 	// another. Empty leaves the rule to a play, which is how a scenario makes
 	// the moment the rule arrives part of the demo.
 	Components []string `yaml:"components"`
+	// Reviewers are the usernames of the people whose approval counts. The
+	// requirement names them, so an approval from anyone else, another agent
+	// included, is recorded and does not close the ChangeSet. Empty names the
+	// user who seeds the demo. A reviewer's approval of a change they wrote
+	// does not count either, so list two where reviewers also write.
+	Reviewers []string `yaml:"reviewers"`
 	// Description says what the requirement is for, in the author's words.
 	Description string `yaml:"description"`
 }

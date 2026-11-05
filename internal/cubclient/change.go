@@ -174,3 +174,33 @@ func (c *Client) PromoteStage(changeOrderID uuid.UUID, stage string) error {
 	}
 	return nil
 }
+
+// UserByUsername returns the User with the username, or nil.
+func (c *Client) UserByUsername(username string) (*goclient.User, error) {
+	where := "Username = '" + strings.ReplaceAll(username, "'", "''") + "'"
+	res, err := c.api.ListUsersWithResponse(c.ctx, &goclient.ListUsersParams{Where: &where})
+	if cubapi.IsAPIError(err, res) {
+		return nil, cubapi.InterpretErrorGeneric(err, res)
+	}
+	if res.JSON200 == nil {
+		return nil, nil
+	}
+	for _, ext := range *res.JSON200 {
+		if ext.User != nil && ext.User.Username == username {
+			return ext.User, nil
+		}
+	}
+	return nil, nil
+}
+
+// Me returns the user the client acts as, as a member of its organization.
+func (c *Client) Me() (*goclient.OrganizationMember, error) {
+	res, err := c.api.GetMeWithResponse(c.ctx)
+	if cubapi.IsAPIError(err, res) {
+		return nil, cubapi.InterpretErrorGeneric(err, res)
+	}
+	if res.JSON200 == nil {
+		return nil, fmt.Errorf("get the current user: %s", res.Status())
+	}
+	return res.JSON200, nil
+}

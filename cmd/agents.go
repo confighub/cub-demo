@@ -97,13 +97,17 @@ func newAgentsRunCmd() *cobra.Command {
 command they run and what they are waiting on. A change the review workflow
 refuses to close is handed to --reviewer, who approves it in the UI or with
 "cub variant approve <base> --all --revision ChangeSet:<base>/<changeset>";
-the agent closes it on its next move. Default reviewer: the user of the active
-context. Ctrl-C stops the run; a later run picks up where the org stands.`,
+the agent closes it on its next move. Default reviewer: the reviewers the
+scenario lists under workflows.review, or the user of the active context when
+it lists none. Ctrl-C stops the run; a later run picks up where the org stands.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			p, err := presenter(false)
 			if err != nil {
 				return err
+			}
+			if review := p.Model.Scenario.Workflows.Review; reviewer == "" && review != nil {
+				reviewer = strings.Join(review.Reviewers, ",")
 			}
 			if reviewer == "" {
 				reviewer, _ = cubexec.Run("context", "get", "-o", "jq=.coordinate.user")
@@ -125,7 +129,7 @@ context. Ctrl-C stops the run; a later run picks up where the org stands.`,
 		},
 	}
 	c.Flags().BoolVar(&once, "once", false, "one move per agent, then stop")
-	c.Flags().StringVar(&reviewer, "reviewer", "", "who to ask to review a change the workflow refuses to close; default: the active context's user")
+	c.Flags().StringVar(&reviewer, "reviewer", "", "who to ask to review a change the workflow refuses to close; default: the scenario's reviewers, or the active context's user")
 	c.Flags().DurationVar(&tick, "tick", 2*time.Second, "how often the runner checks which agents are due")
 	return c
 }

@@ -66,13 +66,45 @@ func (s *Seeder) workflows() error {
 		}
 	}
 	fmt.Fprintf(s.Out, "  ensured %d shared workflow entities in %s (%d created or updated)\n", len(defs), s.Model.Home, ensured)
-	if body := s.Model.ReviewWorkflowJSON(); body != nil {
+	if review := s.Model.Scenario.Workflows.Review; review != nil {
+		names, ids, err := s.reviewers(review)
+		if err != nil {
+			return err
+		}
+		body := s.Model.ReviewWorkflowJSON(ids)
 		if _, err := s.ensureWorkflow(home, scenario.ReviewWorkflowSlug, body, bySlug[scenario.ReviewWorkflowSlug]); err != nil {
 			return err
 		}
-		fmt.Fprintf(s.Out, "  ensured review workflow %s in %s\n", scenario.ReviewWorkflowSlug, s.Model.Home)
+		fmt.Fprintf(s.Out, "  ensured review workflow %s in %s: approval from %s\n",
+			scenario.ReviewWorkflowSlug, s.Model.Home, strings.Join(names, ", "))
 	}
 	return s.reviewPolicy(home)
+}
+
+// reviewers resolves the people whose approval the review workflow counts to
+// their usernames and user IDs: the ones the scenario lists, or the user
+// seeding the demo when it lists none. Naming them is what keeps one agent
+// from approving another's change.
+func (s *Seeder) reviewers(review *scenario.ReviewWorkflow) (names, ids []string, err error) {
+	if len(review.Reviewers) == 0 {
+		me, err := s.Client.Me()
+		if err != nil {
+			return nil, nil, fmt.Errorf("review workflow: %w", err)
+		}
+		return []string{me.Username}, []string{me.UserID.String()}, nil
+	}
+	for _, name := range review.Reviewers {
+		user, err := s.Client.UserByUsername(name)
+		if err != nil {
+			return nil, nil, fmt.Errorf("review workflow: reviewer %s: %w", name, err)
+		}
+		if user == nil {
+			return nil, nil, fmt.Errorf("review workflow: reviewer %q is not a user of this organization (workflows.review.reviewers lists usernames)", name)
+		}
+		names = append(names, user.Username)
+		ids = append(ids, user.UserID.String())
+	}
+	return names, ids, nil
 }
 
 // ensureWorkflow creates or updates one ChangeWorkflow entity in the home

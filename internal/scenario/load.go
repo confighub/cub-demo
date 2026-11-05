@@ -503,6 +503,16 @@ func (s *Scenario) validateAgents() error {
 			}
 			seen[c] = true
 		}
+		named := map[string]bool{}
+		for _, r := range review.Reviewers {
+			if strings.TrimSpace(r) == "" {
+				return fmt.Errorf("workflows.review: a reviewer is empty")
+			}
+			if named[r] {
+				return fmt.Errorf("workflows.review: reviewer %q is listed twice", r)
+			}
+			named[r] = true
+		}
 		if s.Workflows.Disabled {
 			return fmt.Errorf("workflows.review needs workflows, which the scenario disables")
 		}

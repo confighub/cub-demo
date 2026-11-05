@@ -201,21 +201,25 @@ const ReviewRequirementName = "change-reviewed"
 
 // ReviewWorkflowJSON renders the review workflow's ChangeWorkflow entity, or
 // nil when the scenario declares none: no stages, and one requirement on
-// closing, an approval from someone who did not write the change.
-func (m *Model) ReviewWorkflowJSON() []byte {
+// closing, an approval from one of the reviewers, given as user IDs, who did
+// not write the change.
+func (m *Model) ReviewWorkflowJSON(reviewerIDs []string) []byte {
 	review := m.Scenario.Workflows.Review
 	if review == nil {
 		return nil
 	}
 	description := review.Description
 	if description == "" {
-		description = "a change is approved by someone who did not write it before it leaves the base"
+		description = "a change is approved by a reviewer who did not write it before it leaves the base"
 	}
+	ids := slices.Clone(reviewerIDs)
+	slices.Sort(ids)
 	e := map[string]any{
 		"DisplayName": "Change review",
 		"Final":       map[string]any{"Prerequisites": []string{ReviewRequirementName}},
 		"AttestationPrerequisites": []any{map[string]any{
 			"Name":        ReviewRequirementName,
+			"FromUserIDs": ids,
 			"Description": description,
 		}},
 	}
