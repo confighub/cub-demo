@@ -281,7 +281,7 @@ play:
 ```yaml
 plays:
   catalog-api-needs-review:
-    - run: cub component update --patch catalog-api --change-workflow-required --allowed-change-workflow {{.Home}}/change-review --allowed-change-workflow {{.Workflow "catalog-api"}}
+    - run: cub component update --patch catalog-api --require-change-workflow --allowed-change-workflow {{.Home}}/change-review --allowed-change-workflow {{.Workflow "catalog-api"}}
 ```
 
 An agent reads its Component at the start of every cycle. Where a workflow is required it opens

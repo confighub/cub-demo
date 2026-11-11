@@ -307,7 +307,11 @@ func (r *Runner) requiresWorkflow(st *agentState) (bool, error) {
 	}
 	for _, c := range components {
 		if slug, _ := c["Slug"].(string); slug == st.def.Component {
-			required, _ := c["ChangeWorkflowRequired"].(bool)
+			// RequireChangeWorkflow was named ChangeWorkflowRequired before ConfigHub renamed it.
+			required, _ := c["RequireChangeWorkflow"].(bool)
+			if !required {
+				required, _ = c["ChangeWorkflowRequired"].(bool)
+			}
 			return required, nil
 		}
 	}

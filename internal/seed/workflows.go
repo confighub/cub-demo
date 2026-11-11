@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -172,6 +173,7 @@ func (s *Seeder) reviewPolicy(home *goclient.Space) error {
 		if component == nil {
 			continue
 		}
+		var required bool
 		var patch map[string]any
 		switch {
 		case s.Model.ReviewRequired(cm.Name):
@@ -180,27 +182,28 @@ func (s *Seeder) reviewPolicy(home *goclient.Space) error {
 				return fmt.Errorf("component %s: its rollout workflow %s is not seeded", cm.Name, s.Model.WorkflowFor(cm).Slug)
 			}
 			allowed := []uuid.UUID{review, rollout}
-			if component.ChangeWorkflowRequired && sameIDs(component.AllowedChangeWorkflowIDs, allowed) {
+			// The annotation is set with the policy, so it says the policy is in place without
+			// reading the field that requires a workflow, whose name differs between servers.
+			if component.Annotations[reviewPolicyAnnotation] != "" && sameIDs(component.AllowedChangeWorkflowIDs, allowed) {
 				continue
 			}
-			patch = map[string]any{"ChangeWorkflowRequired": true, "AllowedChangeWorkflowIDs": allowed,
+			required = true
+			patch = map[string]any{"AllowedChangeWorkflowIDs": allowed,
 				"Annotations": map[string]any{reviewPolicyAnnotation: "true"}}
 			fmt.Fprintf(s.Out, "  component %s requires a workflow: %s for changesets, %s for change orders\n",
 				cm.Name, scenario.ReviewWorkflowSlug, s.Model.WorkflowFor(cm).Slug)
 		case component.Annotations[reviewPolicyAnnotation] != "":
-			patch = map[string]any{"ChangeWorkflowRequired": false, "AllowedChangeWorkflowIDs": []uuid.UUID{},
+			patch = map[string]any{"AllowedChangeWorkflowIDs": []uuid.UUID{},
 				"Annotations": map[string]any{reviewPolicyAnnotation: nil}}
 			fmt.Fprintf(s.Out, "  component %s no longer requires a workflow\n", cm.Name)
 		default:
 			continue
 		}
-		raw, _ := json.Marshal(patch)
-		if err := s.Client.PatchComponent(component.ComponentID, raw); err != nil {
+		if err := s.patchWorkflowPolicy(component.ComponentID, required, patch); err != nil {
 			return fmt.Errorf("component %s workflow policy: %w", cm.Name, err)
 		}
-		component.ChangeWorkflowRequired, _ = patch["ChangeWorkflowRequired"].(bool)
 		component.AllowedChangeWorkflowIDs, _ = patch["AllowedChangeWorkflowIDs"].([]uuid.UUID)
-		if component.ChangeWorkflowRequired {
+		if required {
 			if component.Annotations == nil {
 				component.Annotations = map[string]string{}
 			}
@@ -210,6 +213,24 @@ func (s *Seeder) reviewPolicy(home *goclient.Space) error {
 		}
 	}
 	return nil
+}
+
+// patchWorkflowPolicy patches a Component with patch and with whether it requires a
+// ChangeWorkflow. ConfigHub renamed that field from ChangeWorkflowRequired to
+// RequireChangeWorkflow, and a server refuses a patch naming a field it does not have, so a
+// server from before the rename is patched again with the old name.
+func (s *Seeder) patchWorkflowPolicy(componentID uuid.UUID, required bool, patch map[string]any) error {
+	var err error
+	for _, field := range []string{"RequireChangeWorkflow", "ChangeWorkflowRequired"} {
+		named := maps.Clone(patch)
+		named[field] = required
+		raw, _ := json.Marshal(named)
+		err = s.Client.PatchComponent(componentID, raw)
+		if err == nil || !strings.Contains(err.Error(), "invalid attributes") {
+			return err
+		}
+	}
+	return err
 }
 
 // sameIDs says whether two lists hold the same IDs, in any order.
