@@ -127,12 +127,16 @@ Release published for a change order (`cub release publish --revision ChangeOrde
 `ChangeOrderID` in the API) is recorded on the Release, and that is what advances the change
 order's `Stage`, up to `Completed`, when the Release is published and when live status is
 reported on it; a Release of the same revisions published without naming the change order
-satisfies the gates but leaves `Stage` where it was. One workflow
+satisfies the gates but leaves `Stage` where it was (the next promotion advances it). The
+release tag marks each unit as the change order left it, so publishing by `--revision
+ChangeOrder:` into a space another change order has reached since rolls that other change
+back; the `release` primitive publishes the head for that reason (checked 2026-11-14 on a
+server built from main). One workflow
 therefore governs many components' rollouts — but only components of the same rollout
 *shape*: promotion past a stage that selects no space is refused, so the tool creates one
 shared workflow per distinct class coverage (`standard-rollout` for full coverage, which most
-components share; e.g. `rollout-uat-prod` for a component placed on uat and prod only). `cub variant promote --change-order --target-stage` promotes
-stage by stage, and a base Space (no `ReleaseTargetID`) can never satisfy
+components share; e.g. `rollout-uat-prod` for a component placed on uat and prod only). `cub variant promote --change-order` advances one stage per call; `--target-stage` names the
+stage and does not walk the stages before it (checked 2026-11-14). A base Space (no `ReleaseTargetID`) can never satisfy
 `released`/`healthy`, so a stage cannot currently contain a class base and the deployments
 cloned from it — the bases-first shape below is the consequence.
 
@@ -216,11 +220,13 @@ self-describing:
 - **Context pin.** A scenario may declare `context: <cub context name>`; up, down and status
   refuse when the active context differs, so a pinned demo cannot fire into the wrong org.
 - **Provenance is the definition.** `install` stores the entire scenario bundle — scenario.yaml,
-  every component.yaml and manifest, the external templates — as AppConfig/YAML units in a
+  every component.yaml and manifest, the external templates — as AppConfig/Text units in a
   `<name>-scenario` space, one unit per file, hash-skipped like everything else. The org itself
   answers "what defines this demo, at which revision", scenario updates land as ordinary
-  revisions, and every other verb reads the definition back from this space. Manifest templates
-  must therefore be valid YAML: template expressions that begin a scalar or key are quoted.
+  revisions, and every other verb reads the definition back from this space. Text, not YAML,
+  because a `--where-data` query over the org would otherwise match the bundle's copy of a
+  manifest next to the units made from it. Manifest templates must still be valid YAML, since
+  the seeder renders and parses them: template expressions that begin a scalar or key are quoted.
 - **`cub demo list`** groups the org's spaces by DemoName: which demos live here, how big.
 
 Per-stage workflow gates are configurable per scenario (`workflows.prerequisites`); the

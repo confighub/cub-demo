@@ -65,8 +65,9 @@ func (p *Presenter) changeFlags() []string {
 // Variants is a label selector. Stage is a workflow fact and needs a change
 // order to resolve — found from Component, or named with ChangeOrder as
 // space/slug — because a ChangeWorkflow is not bound to a component: the
-// component is the change order's, from the space it lives in. Selectors intersect; an empty selector
-// is every deployment space of the scenario.
+// component is the change order's, from the space it lives in. A ChangeOrder
+// named without a Stage means the stage it is in now. Selectors intersect; an
+// empty selector is every deployment space of the scenario.
 type Selector struct {
 	Component   string
 	Variants    []string
@@ -113,12 +114,19 @@ func (p *Presenter) Resolve(sel Selector) ([]*goclient.Space, *Rollout, error) {
 		return nil, nil, err
 	}
 	var rollout *Rollout
-	if sel.Stage != "" {
+	if sel.Stage != "" || sel.ChangeOrder != "" {
 		rollout, err = p.FindRollout(sel.Component, sel.ChangeOrder)
 		if err != nil {
 			return nil, nil, err
 		}
-		members, err := p.StageSpaces(rollout, sel.Stage)
+		stage := sel.Stage
+		if stage == "" {
+			stage, err = p.currentStage(rollout)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		members, err := p.StageSpaces(rollout, stage)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -132,4 +140,26 @@ func (p *Presenter) Resolve(sel Selector) ([]*goclient.Space, *Rollout, error) {
 	}
 	sort.Slice(spaces, func(i, j int) bool { return spaces[i].Slug < spaces[j].Slug })
 	return spaces, rollout, nil
+}
+
+// currentStage is the stage a change order is in now: its Stage, or the
+// workflow's last stage once it is Completed, so a delivery play run again
+// after the rollout finished still names the spaces it finished in. A change
+// order nothing has promoted yet is in no stage.
+func (p *Presenter) currentStage(r *Rollout) (string, error) {
+	ref := r.Space.Slug + "/" + r.ChangeOrder.Slug
+	switch r.ChangeOrder.Stage {
+	case "":
+		return "", fmt.Errorf("change order %s has not been promoted into a stage yet", ref)
+	case "Completed":
+		wf, err := p.workflowFor(r)
+		if err != nil {
+			return "", err
+		}
+		if len(wf.Stages) == 0 {
+			return "", fmt.Errorf("change order %s has a workflow with no stages", ref)
+		}
+		return wf.Stages[len(wf.Stages)-1].Name, nil
+	}
+	return r.ChangeOrder.Stage, nil
 }

@@ -16,8 +16,9 @@ import (
 // the org becomes self-describing ("what defines this demo, at which
 // revision?" is answered by ConfigHub), scenario updates land as ordinary
 // revisions, and every other verb reads the definition back from here. The
-// manifests are Go templates but valid YAML, so they are stored as
-// AppConfig/YAML.
+// manifests are Go templates, so they are stored as AppConfig/Text: not as
+// YAML, because a data query over the org (--where-data) would otherwise
+// match the bundle's copy of a manifest next to the units made from it.
 func (s *Seeder) StoreBundle() error {
 	if s.Concurrency <= 0 {
 		s.Concurrency = 8
@@ -59,7 +60,7 @@ func (s *Seeder) StoreBundle() error {
 				SpaceID:       sp.SpaceID,
 				Slug:          unitSlug,
 				DisplayName:   strings.ReplaceAll(f.Path, "/", " | "),
-				ToolchainType: "AppConfig/YAML",
+				ToolchainType: "AppConfig/Text",
 				Labels:        s.baseLabels(nil),
 				Annotations:   map[string]string{"cub-demo.confighub.com/path": f.Path},
 			})

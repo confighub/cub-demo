@@ -5,6 +5,8 @@ units:
   - {slug: ingress, file: ingress.yaml}
 values:
   version: 3.4.2
+# What the bump-image primitive bumps for storefront.
+release: {unit: web, container: web}
 perClass:
   dev:
     - {function: set-replicas, args: ["{{.Class.Replicas}}"], where: "Slug = 'web'"}

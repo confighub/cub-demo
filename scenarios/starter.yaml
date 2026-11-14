@@ -1,0 +1,105 @@
+# Meridian at starter size: two regions, dev and prod, seven clusters, two
+# platform components and three workloads from two teams. Small enough to seed
+# in under a minute on the hosted service, and shaped for one story: a platform
+# team's change that has to land in every team's config while the teams keep
+# shipping. It shares component and cluster names with meridian (it is the same
+# company, smaller), so the two cannot be installed in one org.
+name: starter
+company: Meridian Group
+domain: meridian.example
+cloud: aws
+
+regions:
+  - {name: us-east, providerRegion: us-east-1, dnsZone: use1.meridian.example, locality: "Virginia, US"}
+  - {name: eu-west, providerRegion: eu-west-1, dnsZone: euw1.meridian.example, locality: "Dublin, IE"}
+
+classes:
+  - {name: dev,  replicas: 1, logLevel: debug, size: small, dbClass: db.t3.micro,  multiAZ: false, nodeCount: 3}
+  - {name: prod, replicas: 3, logLevel: warn,  size: large, dbClass: db.r6g.large, multiAZ: true,  nodeCount: 9}
+
+departments: [retail, payments]
+
+clusters:
+  kubernetesVersions: ["1.31", "1.32"]
+  rules:
+    - {class: dev,  department: shared,   count: {default: 1}}
+    - {class: prod, department: shared,   count: {us-east: 2, eu-west: 1}}
+    - {class: prod, department: retail,   count: {us-east: 1}}
+    - {class: prod, department: payments, count: {eu-west: 1}}
+
+# The platform team's components, on every cluster.
+catalog:
+  - {name: cert-manager, owner: platform-team, dir: catalog/cert-manager}
+  - {name: traefik,      owner: platform-team, dir: catalog/traefik}
+
+# Three workloads, two teams. Each has an Ingress whose certificate comes from
+# the cert-manager ClusterIssuer "letsencrypt": the platform team's concern,
+# written in the app teams' config.
+workloads:
+  - name: storefront
+    owner: retail-web
+    department: retail
+    dir: workloads/storefront
+    placement:
+      - {departments: [retail, shared]}
+  - name: catalog-api
+    owner: retail-platform
+    department: retail
+    dir: workloads/catalog-api
+    external: [{kind: rds, name: catalog-db}]
+    placement:
+      - {departments: [retail, shared]}
+  - name: checkout
+    owner: payments-core
+    department: payments
+    dir: workloads/checkout
+    external: [{kind: rds, name: checkout-db}]
+    placement:
+      - {departments: [payments]}
+      - {departments: [shared], classes: [dev]}
+
+# The platform team is already mid-upgrade when the reader arrives.
+workflows:
+  changeOrders:
+    - {component: cert-manager, slug: cert-manager-1-17-2, description: "Bump cert-manager to v1.17.2",
+       unit: controller, function: set-image-reference, args: [cert-manager-controller, ":v1.17.2"], landedThrough: dev}
+
+# The other people in the story. The reader is the platform engineer and types
+# the platform change by hand; these plays are the storefront team's CI and
+# the delivery pipeline.
+plays:
+  # The storefront team ships a patch release: bump the image, open a change
+  # order under the rollout workflow, take it through the bases into dev, and
+  # let the pipeline release it there and the delivery bot report it healthy.
+  ship:
+    - call: bump-image
+      with: {component: storefront, strategy: patch}
+    - call: changeorder
+      with: {component: storefront, description: 'storefront {{.Version}}'}
+    - run: cub variant promote --change-order {{.ChangeOrder}}
+    - run: cub variant promote --change-order {{.ChangeOrder}}
+    - call: release
+      with: {changeorder: '{{.ChangeOrder}}'}
+    - call: observe
+      with: {changeorder: '{{.ChangeOrder}}', when: release-newer}
+  # The delivery pipeline for the platform change: publish a release of the
+  # stage the change order is in on every space that has taken it, then the
+  # delivery bot reports each rollout healthy.
+  deliver:
+    - call: release
+      with: {changeorder: '{{.Home}}/issuer-letsencrypt-v2'}
+    - call: observe
+      with: {changeorder: '{{.Home}}/issuer-letsencrypt-v2', when: release-newer}
+  # The same pipeline for whatever storefront rollout is in flight.
+  deliver-storefront:
+    - call: release
+      with: {component: storefront}
+    - call: observe
+      with: {component: storefront, when: release-newer}
+
+# Everything healthy and released, so the first promotion the reader makes
+# meets no gate it cannot explain.
+story:
+  seed: 7
+  liveStatus: {degradedPercent: 0, outOfSyncPercent: 0, progressingPercent: 0}
+  unreleased: {percent: 0}

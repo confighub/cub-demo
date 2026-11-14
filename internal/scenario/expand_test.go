@@ -53,7 +53,7 @@ func TestMeridianShape(t *testing.T) {
 		}
 	}
 	// External resources become units.
-	if !reflect.DeepEqual(byName["checkout"].Units, []string{"namespace", "api", "worker", "checkout-db", "order-events"}) {
+	if !reflect.DeepEqual(byName["checkout"].Units, []string{"namespace", "api", "worker", "ingress", "checkout-db", "order-events"}) {
 		t.Errorf("checkout units = %v", byName["checkout"].Units)
 	}
 	if m.Home != "meridian-platform" {
@@ -259,5 +259,42 @@ func TestReviewWorkflowJSON(t *testing.T) {
 	// Sorted, so the definition's hash does not depend on the order reviewers are listed in.
 	if got := wf.AttestationPrerequisites[0].FromUserIDs; len(got) != 2 || got[0] != "a" || got[1] != "b" {
 		t.Errorf("want the reviewers' IDs sorted, got %v", got)
+	}
+}
+
+// The starter scenario is the first-experience dataset: it has to stay small
+// enough for the default org quotas, and every workload carries the Ingress
+// the story's platform change rewrites.
+func TestStarterShape(t *testing.T) {
+	b, err := Load(os.DirFS("../.."), "starter")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := Expand(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tt := m.Totals
+	if tt.Spaces > 100 || tt.Units > 1000 || tt.Links > 1000 {
+		t.Errorf("starter exceeds the default quotas: %+v", tt)
+	}
+	for _, cm := range m.Components {
+		if cm.Layer != "workload" {
+			continue
+		}
+		found := false
+		for _, u := range cm.Units {
+			if u == "ingress" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s has no ingress unit", cm.Name)
+		}
+	}
+	for _, play := range []string{"ship", "deliver", "deliver-storefront"} {
+		if _, ok := m.Scenario.Plays[play]; !ok {
+			t.Errorf("starter lacks play %q", play)
+		}
 	}
 }
