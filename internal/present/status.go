@@ -83,8 +83,24 @@ func (p *Presenter) Argobot(sel Selector, force bool) error {
 		fmt.Fprintf(p.Out, "  reported Synced/Healthy on %s (release %d)\n", sp.Slug, rel.ReleaseNum)
 		reported++
 	}
-	if !p.DryRun {
-		fmt.Fprintf(p.Out, "argobot reported on %d of %d spaces\n", reported, len(spaces))
+	if p.DryRun {
+		return nil
+	}
+	fmt.Fprintf(p.Out, "argobot reported on %d of %d spaces\n", reported, len(spaces))
+	if reported == 0 {
+		return nil
+	}
+	// A report on a head Release satisfies a change order's health gate but
+	// does not advance its stored Stage, so the rollout the report was for is
+	// refreshed: the one the selection resolved, or the component's one in
+	// flight when the selection named only the component.
+	if rollout == nil && sel.Component != "" {
+		if r, err := p.FindRollout(sel.Component, ""); err == nil {
+			rollout = r
+		}
+	}
+	if rollout != nil {
+		return p.refreshStage(rollout)
 	}
 	return nil
 }

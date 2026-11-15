@@ -19,6 +19,7 @@ var primitives = map[string]func(p *Presenter, vars map[string]string, with para
 	"invoke":      stepInvoke,
 	"bump-image":  stepBumpImage,
 	"changeorder": stepChangeOrder,
+	"release":     stepRelease,
 }
 
 // PrimitiveNames lists the callable primitives, for validation and help.
@@ -125,6 +126,16 @@ func stepObserve(p *Presenter, vars map[string]string, with params) error {
 	return p.Incident(sel, health, with.str("message"))
 }
 
+// stepRelease publishes a Release pinned to a change order on the selected
+// deployment spaces of its current (or the named) stage: the delivery
+// pipeline's publishing step, which observe then reports on.
+func stepRelease(p *Presenter, vars map[string]string, with params) error {
+	if err := with.allow("release", selectorKeys...); err != nil {
+		return err
+	}
+	return p.Release(with.selector())
+}
+
 // stepInvoke runs one ConfigHub function against one unit, the generic
 // change-making move: whatever the function vocabulary can express, a play
 // can do to a base.
@@ -190,7 +201,8 @@ func stepBumpImage(p *Presenter, vars map[string]string, with params) error {
 
 // stepChangeOrder names the change: creates a change order in the component's
 // base under its workflow. The slug defaults to <component>-<Version> when a
-// bump-image step ran earlier in the play.
+// bump-image step ran earlier in the play. Exports ChangeOrder, as
+// <base>/<slug>, for the steps after it (a promote line, release, observe).
 func stepChangeOrder(p *Presenter, vars map[string]string, with params) error {
 	if err := with.allow("changeorder", "component", "slug", "description"); err != nil {
 		return err
@@ -225,8 +237,12 @@ func stepChangeOrder(p *Presenter, vars map[string]string, with params) error {
 			return fmt.Errorf("change order %s/%s already exists (%s)", cm.RootSpace, slug, existing.State)
 		}
 	}
-	return p.runCub([]string{"changeorder", "create", "--space", cm.RootSpace, slug,
-		"--description", desc, "--change-workflow", p.Model.Home + "/" + p.Model.WorkflowFor(cm).Slug})
+	if err := p.runCub([]string{"changeorder", "create", "--space", cm.RootSpace, slug,
+		"--description", desc, "--change-workflow", p.Model.Home + "/" + p.Model.WorkflowFor(cm).Slug}); err != nil {
+		return err
+	}
+	vars["ChangeOrder"] = cm.RootSpace + "/" + slug
+	return nil
 }
 
 // runCub prints and runs one cub command, honoring dry-run.

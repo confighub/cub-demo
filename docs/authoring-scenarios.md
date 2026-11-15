@@ -202,8 +202,8 @@ expressions that begin a scalar or key.
 A play is a named sequence of steps, run with `cub demo play <name>` (no name lists them;
 `--dry-run` prints without running). Steps run in order with `CUB_CONTEXT` pinned to the
 scenario's context; the first failure stops the run. This is the tool/scenario boundary: the
-tool ships four generic primitives, and every demo-specific actor ("ci", "argobot", an
-outage) is a play the scenario composes from them.
+tool ships five generic primitives, and every demo-specific actor ("ci", "argobot", an
+outage, a delivery pipeline) is a play the scenario composes from them.
 
 A step is either a shell line or a primitive call:
 
@@ -221,7 +221,8 @@ The primitives, with their `with:` parameters (unknown keys are rejected, naming
 
 - **`observe`** — report live status on the latest Release of selected deployment spaces.
   Selectors: `component`, `variants` (cluster names), `stage` (+ `changeorder` as `space/slug`
-  when the component has several in flight). `when: release-newer` reports Synced/Healthy
+  when the component has several in flight, or on its own for a change order that lives
+  outside any component's base; `changeorder` without `stage` means the stage it is in now). `when: release-newer` reports Synced/Healthy
   only on spaces whose latest Release nothing has reported on yet — a delivery bot (`force`
   re-reports regardless). `health: Degraded|OutOfSync|Progressing` with `message` reports an
   incident; no `when`/`health` means heal: report the selection healthy. Status is a
@@ -234,7 +235,17 @@ The primitives, with their `with:` parameters (unknown keys are rejected, naming
 - **`changeorder`** — create a change order in the component's base, bound to the shared
   workflow matching its class coverage: `component`, `slug` (defaults to
   `<component>-<version>` from an earlier bump-image), `description`. Refuses a slug that
-  already exists.
+  already exists. Exports `.ChangeOrder` as `<base>/<slug>` for the steps after it, so a play
+  can `run: cub variant promote --change-order {{.ChangeOrder}}` and then release it.
+- **`release`** — the delivery pipeline's publishing step: publish a Release of the head of
+  every selected deployment space that has taken the change order but not released it.
+  Selectors as for `observe`; a change order is required (`changeorder` as `space/slug`, or
+  `component` for its one in flight), and without `stage` it is the stage the change order is
+  in now. It publishes the head rather than `--revision ChangeOrder:`, because the change
+  order's own release tag marks each unit as the change left it, and publishing by it would
+  roll back what another change order promoted into the space since; the server counts the
+  space as released for the change order either way. A `deliver` play is `release` followed by
+  `observe` with `when: release-newer`.
 
 Write plays so they run twice without a teardown: derive slugs from bumped versions rather
 than hard-coding them, and let `observe` defaults heal what an incident play painted.

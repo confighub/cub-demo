@@ -52,6 +52,10 @@ func (c PlayContext) Workflow(component string) (string, error) {
 func (c PlayContext) Version() (string, error)         { return c.varNamed("Version") }
 func (c PlayContext) PreviousVersion() (string, error) { return c.varNamed("PreviousVersion") }
 
+// ChangeOrder is the change order the changeorder primitive created earlier
+// in the play, as <base>/<slug>: what a promote line or a release step names.
+func (c PlayContext) ChangeOrder() (string, error) { return c.varNamed("ChangeOrder") }
+
 // Var reads any exported variable by name, for vocabulary future primitives add.
 func (c PlayContext) Var(name string) (string, error) { return c.varNamed(name) }
 

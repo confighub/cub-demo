@@ -81,8 +81,10 @@ carries the `DemoName=<scenario>` label, which is also the teardown key.
 
 ## Scenarios
 
-`scenarios/meridian.yaml` is the embedded default; `scenarios/e2e.yaml` is the small one the
-e2e test uses. To customize: `cub demo scenario export meridian <dir>`, edit, then
+`scenarios/meridian.yaml` is the embedded default; `scenarios/starter.yaml` is the same company
+at starter size (7 clusters, 52 spaces, seeds in seconds, fits the default quotas), shaped for
+the first-experience story of a platform change landing in every team's config;
+`scenarios/e2e.yaml` is the small one the e2e test uses. To customize: `cub demo scenario export meridian <dir>`, edit, then
 `cub demo install <dir>/meridian.yaml` — component directories you delete fall back to the
 embedded copies.
 Scenario names are org-global: two scenarios must not share cluster or component names, and the

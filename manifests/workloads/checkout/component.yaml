@@ -2,6 +2,7 @@ units:
   - {slug: namespace, file: namespace.yaml}
   - {slug: api, file: api.yaml}
   - {slug: worker, file: worker.yaml}
+  - {slug: ingress, file: ingress.yaml}
 values:
   version: 4.1.0
 perClass:

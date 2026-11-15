@@ -2,6 +2,7 @@ units:
   - {slug: namespace, file: namespace.yaml}
   - {slug: api, file: api.yaml}
   - {slug: config, file: config.yaml}
+  - {slug: ingress, file: ingress.yaml}
 values:
   version: 5.2.0
 # What the bump-image primitive bumps for catalog-api.

@@ -73,6 +73,12 @@ plays:
   argobot:
     - call: observe
       with: {component: e2e-catalog-api, when: release-newer}
+  # The pipeline for the stage the rollout is in: publish, then the bot reports.
+  deliver:
+    - call: release
+      with: {component: e2e-catalog-api}
+    - call: observe
+      with: {component: e2e-catalog-api, when: release-newer}
   incident:
     - call: observe
       with:
