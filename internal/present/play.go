@@ -147,9 +147,10 @@ func (p *Presenter) Describe(name string) ([]string, error) {
 }
 
 // Play runs a move step by step, stopping at the first failure. Shell lines
-// run through the shell with CUB_CONTEXT pinned to the scenario's context;
-// call steps dispatch to the tool's primitives with their with: values
-// rendered. Output streams to the terminal, since the point is to be watched.
+// run through the shell in the context cub invoked the plugin with, or the one
+// the scenario pins; call steps dispatch to the tool's primitives with their
+// with: values rendered. Output streams to the terminal, since the point is to
+// be watched.
 func (p *Presenter) Play(name string) error {
 	steps, ok := p.Model.Scenario.Plays[name]
 	if !ok {
@@ -177,12 +178,18 @@ func (p *Presenter) RunSteps(name string, steps []scenario.PlayStep) error {
 				continue
 			}
 			cmd := exec.Command("sh", "-c", line)
+			cmd.Env = append(os.Environ(), "CONFIGHUB_AGENT=1", DemoEnv+"="+p.Model.Name())
+			// Pin the context only when the scenario or the caller names one;
+			// otherwise the line inherits the context cub invoked the plugin
+			// with. Setting CUB_CONTEXT to "" would make cub fall back to the
+			// globally current context, which is not necessarily that one.
 			cubContext := p.Model.Scenario.Context
 			if p.Context != "" {
 				cubContext = p.Context
 			}
-			cmd.Env = append(os.Environ(), "CUB_CONTEXT="+cubContext,
-				"CONFIGHUB_AGENT=1", DemoEnv+"="+p.Model.Name())
+			if cubContext != "" {
+				cmd.Env = append(cmd.Env, "CUB_CONTEXT="+cubContext)
+			}
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmd.Stdin = os.Stdin
