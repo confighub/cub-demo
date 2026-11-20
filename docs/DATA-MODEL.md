@@ -58,7 +58,7 @@ per deployment.
 
 ## Live status
 
-The latest Release of a deployment Space carries `LiveStatus`, as argobot would report it for
+The latest Release of a deployment Space carries `LiveStatus`, as k8sbot would report it for
 the Argo CD Application syncing that Space:
 
 ```json

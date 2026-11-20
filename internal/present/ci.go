@@ -11,7 +11,7 @@ import (
 )
 
 // The pipeline and delivery-bot behaviors that used to be verbs here (CI,
-// argobot) are now plays a scenario composes from the primitives in steps.go.
+// k8sbot) are now plays a scenario composes from the primitives in steps.go.
 
 // currentTag reads the tag the named container runs in the base's unit.
 func (p *Presenter) currentTag(space, unit, container string) (string, error) {

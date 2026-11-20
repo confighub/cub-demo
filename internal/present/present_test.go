@@ -86,7 +86,7 @@ func TestE2EScenarioPlays(t *testing.T) {
 	}
 	p := &Presenter{Model: m}
 	names := p.Plays()
-	for _, want := range []string{"ship", "argobot", "incident", "heal"} {
+	for _, want := range []string{"ship", "k8sbot", "incident", "heal"} {
 		found := false
 		for _, n := range names {
 			if n == want {

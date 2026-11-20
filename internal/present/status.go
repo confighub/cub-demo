@@ -38,13 +38,13 @@ func (p *Presenter) ReleasedUnder(spaces []*goclient.Space, changeOrderID uuid.U
 	return released, nil
 }
 
-// Argobot plays the delivery system: for every selected deployment space
+// K8sbot plays the delivery system: for every selected deployment space
 // whose latest Release nobody has reported on, it writes the LiveStatus
-// argobot would write after a successful sync. A Release already reported on
+// k8sbot would write after a successful sync. A Release already reported on
 // is left alone unless force; spaces with no release are named and skipped,
-// because argobot has nothing to observe there. It never publishes: releasing
+// because k8sbot has nothing to observe there. It never publishes: releasing
 // is a decision the presenter makes.
-func (p *Presenter) Argobot(sel Selector, force bool) error {
+func (p *Presenter) K8sbot(sel Selector, force bool) error {
 	spaces, rollout, err := p.Resolve(sel)
 	if err != nil {
 		return err
@@ -86,7 +86,7 @@ func (p *Presenter) Argobot(sel Selector, force bool) error {
 	if p.DryRun {
 		return nil
 	}
-	fmt.Fprintf(p.Out, "argobot reported on %d of %d spaces\n", reported, len(spaces))
+	fmt.Fprintf(p.Out, "k8sbot reported on %d of %d spaces\n", reported, len(spaces))
 	if reported == 0 {
 		return nil
 	}
