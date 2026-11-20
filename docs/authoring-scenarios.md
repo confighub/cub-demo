@@ -202,7 +202,7 @@ expressions that begin a scalar or key.
 A play is a named sequence of steps, run with `cub demo play <name>` (no name lists them;
 `--dry-run` prints without running). Steps run in order with `CUB_CONTEXT` pinned to the
 scenario's context; the first failure stops the run. This is the tool/scenario boundary: the
-tool ships five generic primitives, and every demo-specific actor ("ci", "argobot", an
+tool ships five generic primitives, and every demo-specific actor ("ci", "k8sbot", an
 outage, a delivery pipeline) is a play the scenario composes from them.
 
 A step is either a shell line or a primitive call:
@@ -273,7 +273,7 @@ agents:
       - call: invoke
         with: {space: '{{.Base "catalog-api"}}', unit: api, function: set-string-path,
                args: [apps/v1/Deployment, spec.template.spec.containers.0.resources.limits.memory, '{{.Pick "768Mi,1Gi"}}']}
-  - name: argobot           # no component: a tick agent, runs its steps every interval
+  - name: k8sbot           # no component: a tick agent, runs its steps every interval
     every: 15s
     change:
       - call: observe

@@ -41,7 +41,7 @@ type Scenario struct {
 	//
 	// This is the tool/scenario boundary: the tool ships capabilities
 	// (observe, invoke, bump-image, changeorder); the scenario names the
-	// actors and beats — its "ci" and "argobot" are plays here, not verbs of
+	// actors and beats — its "ci" and "k8sbot" are plays here, not verbs of
 	// the tool.
 	Plays map[string][]PlayStep `yaml:"plays"`
 

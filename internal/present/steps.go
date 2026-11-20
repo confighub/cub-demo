@@ -11,7 +11,7 @@ import (
 
 // The primitives a play's call: steps may name. Each is generic — selectors,
 // paths and statuses are parameters — so every demo-specific noun ("ci",
-// "argobot", an outage) lives in the scenario's plays, not here. A primitive
+// "k8sbot", an outage) lives in the scenario's plays, not here. A primitive
 // may export variables for the steps after it (bump-image exports Version and
 // Tag); templates in later steps read them as {{.Version}}.
 var primitives = map[string]func(p *Presenter, vars map[string]string, with params) error{
@@ -114,7 +114,7 @@ func stepObserve(p *Presenter, vars map[string]string, with params) error {
 	sel := with.selector()
 	switch with.str("when") {
 	case "release-newer":
-		return p.Argobot(sel, with.bool("force"))
+		return p.K8sbot(sel, with.bool("force"))
 	case "":
 	default:
 		return fmt.Errorf("observe: when %q: the only condition is release-newer", with.str("when"))

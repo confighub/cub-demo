@@ -70,7 +70,7 @@ plays:
         change-desc: 'e2e-catalog-api {{.Version}}: memory limit 1Gi'
     - call: changeorder
       with: {component: e2e-catalog-api, description: 'e2e-catalog-api {{.Version}}'}
-  argobot:
+  k8sbot:
     - call: observe
       with: {component: e2e-catalog-api, when: release-newer}
   # The pipeline for the stage the rollout is in: publish, then the bot reports.

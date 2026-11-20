@@ -107,7 +107,7 @@ creation and teardown order. `PublishRelease` builds the bundle server-side and 
 having unreleased changes.
 
 **Live status** is `Release.LiveStatus`, written as a patch of the Release by the tool that
-deploys it (argobot, for Argo CD): `Reporter`, `DataSource`, normalized `Sync`, `Health` and
+deploys it (k8sbot, for Argo CD): `Reporter`, `DataSource`, normalized `Sync`, `Health` and
 `Operation`, the reporter's own words beside them, `Message`, `ObservedAt`
 (`public/core/livestatus/livestatus.go` maps Argo CD's vocabulary). A newly published Release
 has none until something reports on it, and a Space that was never released has no status at
@@ -159,7 +159,7 @@ where nothing has reported on it yet), `invoke` (one ConfigHub function against 
 `bump-image` (read the base's current tag, bump it, write it back; exports `.Version` to the
 steps after it), `changeorder` (create one bound to the component's shared workflow). Strings are
 templates over the scenario plus the exported variables. So a scenario's "ship" and
-"argobot" are its own vocabulary; the tool never had to hear of either. This is also what
+"k8sbot" are its own vocabulary; the tool never had to hear of either. This is also what
 lets demo content live outside this repo entirely: the internal change-workflows demo is one
 scenario file maintained elsewhere and installed by path, riding the embedded component
 directories.

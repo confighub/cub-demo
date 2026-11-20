@@ -15,7 +15,7 @@ import (
 // both admits the author and claims the dialect.
 const LiveStatusReporter = "cub-demo/argocd"
 
-// Observation is one live-status report in Argo CD's words: what argobot
+// Observation is one live-status report in Argo CD's words: what k8sbot
 // would read off the Application syncing a deployment space.
 type Observation struct {
 	Sync, Health, Phase, Message string
