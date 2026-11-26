@@ -27,38 +27,45 @@ func (s *Seeder) views() error {
 	// stored config — "Replicas=path:spec.replicas". Both `cub resource list
 	// --view` and the View Explorer evaluate them.
 	type def struct {
-		slug, display, from, where, groupBy string
-		columns                             []string
+		slug, display, from, where string
+		// whereData filters Units by their configuration data (Unit views only).
+		whereData, groupBy string
+		columns            []string
 	}
 	// A space names its component with ComponentID, which no view column
 	// renders as a name; a variant's slug starts with it, so Slug carries it.
 	spaceCols := []string{"Slug", "Labels.Variant", "Labels.Stage", "Labels.Region", "Labels.Department"}
 	defs := []def{
 		{"fleet-clusters", "Fleet clusters", "Space",
-			demoWhere(s.Model) + " AND Labels.Layer = 'cluster'", "Labels.Region",
+			demoWhere(s.Model) + " AND Labels.Layer = 'cluster'", "", "Labels.Region",
 			[]string{"Slug", "Labels.Region", "Labels.Stage", "Labels.Department"}},
 		{"prod-deployments", "Prod deployments", "Space",
-			demoWhere(s.Model) + " AND Labels.Role = 'deployment' AND Labels.Stage = 'prod'", "Labels.Region", spaceCols},
+			demoWhere(s.Model) + " AND Labels.Role = 'deployment' AND Labels.Stage = 'prod'", "", "Labels.Region", spaceCols},
 		{"payments-fleet", "Payments fleet", "Space",
-			demoWhere(s.Model) + " AND Labels.Department = 'payments'", "Labels.Stage", spaceCols},
+			demoWhere(s.Model) + " AND Labels.Department = 'payments'", "", "Labels.Stage", spaceCols},
 		{"platform-catalog", "Platform catalog", "Space",
-			demoWhere(s.Model) + " AND Labels.Layer = 'platform' AND Labels.Role = 'base'", "Labels.Owner",
+			demoWhere(s.Model) + " AND Labels.Layer = 'platform' AND Labels.Role = 'base'", "", "Labels.Owner",
 			[]string{"Slug", "Labels.Variant", "Labels.Stage", "Labels.Owner"}},
+		// The platform team's question from the first-experience page, saved: every
+		// unit whose config names the cert-manager issuer, grouped by component.
+		{"letsencrypt-issuer", "Units naming the letsencrypt issuer", "Unit",
+			demoWhere(s.Model), "metadata.annotations.cert-manager~1io/cluster-issuer = 'letsencrypt'", "Labels.Component",
+			[]string{"Slug", "Space.Slug", "Labels.Component", "Space.Labels.Stage", "Space.Labels.Department"}},
 		{"never-released", "Never released", "Unit",
-			demoWhere(s.Model) + " AND Space.Labels.Role = 'deployment' AND LastReleasedRevisionNum = 0", "Labels.Component",
+			demoWhere(s.Model) + " AND Space.Labels.Role = 'deployment' AND LastReleasedRevisionNum = 0", "", "Labels.Component",
 			[]string{"Slug", "Space.Slug", "Labels.Component", "Labels.Stage", "HeadRevisionNum"}},
 		// The next two are Resource views over the workload Deployments: config
 		// content straight from the stored data, no recorded Values needed.
 		{"resource-limits", "Resource limits", "Resource",
 			fmt.Sprintf("ResourceType = 'apps/v1/Deployment' AND Space.Labels.%s = '%s' AND Space.Labels.Role = 'deployment'",
-				LabelDemoName, s.Model.Scenario.Name), "Space.Labels.Stage",
+				LabelDemoName, s.Model.Scenario.Name), "", "Space.Labels.Stage",
 			[]string{"ResourceName", "Unit.Slug", "Space.Slug", "Space.Labels.Stage",
 				"Replicas=path:spec.replicas",
 				"CPU Limit=path:spec.template.spec.containers.0.resources.limits.cpu",
 				"Mem Limit=path:spec.template.spec.containers.0.resources.limits.memory"}},
 		{"images", "Container images", "Resource",
 			fmt.Sprintf("ResourceType = 'apps/v1/Deployment' AND Space.Labels.%s = '%s' AND Space.Labels.Role = 'deployment'",
-				LabelDemoName, s.Model.Scenario.Name), "Unit.Labels.Component",
+				LabelDemoName, s.Model.Scenario.Name), "", "Unit.Labels.Component",
 			[]string{"ResourceName", "Unit.Slug", "Space.Slug", "Unit.Labels.Component", "Space.Labels.Stage",
 				"Image=path:spec.template.spec.containers.0.image"}},
 	}
@@ -71,7 +78,7 @@ func (s *Seeder) views() error {
 		// along with its same-named filter — an AllowExists filter reuse would
 		// carry a stale From/Where (the server rejects an Of that mismatches
 		// Filter.From). The definition hash annotation detects the change.
-		defHash := fnsHashAny([]any{d.slug, d.display, d.from, d.where, d.groupBy, d.columns})
+		defHash := fnsHashAny([]any{d.slug, d.display, d.from, d.where, d.whereData, d.groupBy, d.columns})
 		if existing, err := s.Client.ViewBySlug(home.SpaceID, name+"-"+d.slug); err != nil {
 			return err
 		} else if existing != nil {
@@ -87,7 +94,7 @@ func (s *Seeder) views() error {
 		// partially failed earlier run can leave the filter behind without it.
 		if oldFilter, err := s.Client.FilterBySlug(home.SpaceID, name+"-"+d.slug); err != nil {
 			return err
-		} else if oldFilter != nil && (oldFilter.From != d.from || oldFilter.Where != d.where) {
+		} else if oldFilter != nil && (oldFilter.From != d.from || oldFilter.Where != d.where || oldFilter.WhereData != d.whereData) {
 			if err := s.Client.DeleteFilter(home.SpaceID, oldFilter.FilterID); err != nil {
 				return fmt.Errorf("replace filter %s: %w", d.slug, err)
 			}
@@ -98,6 +105,7 @@ func (s *Seeder) views() error {
 			DisplayName: d.display,
 			From:        d.from,
 			Where:       d.where,
+			WhereData:   d.whereData,
 			Labels:      s.baseLabels(nil),
 		})
 		if err != nil {
