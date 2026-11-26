@@ -102,9 +102,7 @@ func (s *Seeder) componentBases(cm *scenario.ComponentModel) (bool, error) {
 	if cm.Owner != "" {
 		rootLabels["Owner"] = cm.Owner
 	}
-	if cm.Department != "" && cm.Department != "shared" {
-		rootLabels["Department"] = cm.Department
-	}
+	rootLabels["Department"] = departmentLabel(cm.Department)
 	root, _, err := s.ensureSpace(cm.RootSpace, cm.Name+" base", rootLabels, &component.ComponentID)
 	if err != nil {
 		return false, err
@@ -223,9 +221,7 @@ func (s *Seeder) ensureComponent(cm *scenario.ComponentModel) (*goclient.Compone
 		if cm.Owner != "" {
 			labels["Owner"] = cm.Owner
 		}
-		if cm.Department != "" && cm.Department != "shared" {
-			labels["Department"] = cm.Department
-		}
+		labels["Department"] = departmentLabel(cm.Department)
 		if _, err := s.Client.EnsureComponent(goclient.Component{Slug: cm.Name, Labels: labels}); err != nil {
 			return nil, err
 		}

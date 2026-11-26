@@ -49,7 +49,8 @@ cloud: aws                # recorded as the Cloud.Provider fact
 
 **Dimensions.** `regions` (name, providerRegion, dnsZone, locality), `classes` (see below) and
 `departments` (a list of names; the `shared` department is implicit and holds the platform
-clusters — `departments: []` is a valid single-department fleet).
+clusters, labelled `Department=platform` in the org — `departments: []` is a valid
+single-department fleet).
 
 **Classes** are the environment tiers, in promotion order:
 
