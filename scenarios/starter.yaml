@@ -96,6 +96,11 @@ plays:
       with: {component: storefront}
     - call: observe
       with: {component: storefront, when: release-newer}
+  # The delivery bot alone, for a reader who publishes the releases from the
+  # change order's page in the UI: report each released rollout healthy.
+  observe:
+    - call: observe
+      with: {changeorder: '{{.Home}}/issuer-letsencrypt-v2', when: release-newer}
 
 # Everything healthy and released, so the first promotion the reader makes
 # meets no gate it cannot explain.

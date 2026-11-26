@@ -292,7 +292,7 @@ func TestStarterShape(t *testing.T) {
 			t.Errorf("%s has no ingress unit", cm.Name)
 		}
 	}
-	for _, play := range []string{"ship", "deliver", "deliver-storefront"} {
+	for _, play := range []string{"ship", "deliver", "deliver-storefront", "observe"} {
 		if _, ok := m.Scenario.Plays[play]; !ok {
 			t.Errorf("starter lacks play %q", play)
 		}

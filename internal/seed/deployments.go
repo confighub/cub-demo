@@ -116,9 +116,7 @@ func (s *Seeder) deployments() error {
 			"Cluster": c.Name,
 			"Region":  c.Region,
 		}
-		if !c.Shared() {
-			labels["Department"] = c.Department
-		}
+		labels["Department"] = departmentLabel(c.Department)
 		patch, _ := json.Marshal(map[string]any{"Labels": labels, "ReleaseTargetID": targetByCluster[c.Name]})
 		where := fmt.Sprintf("%s AND Labels.Variant = '%s'", demoWhere(s.Model), c.Name)
 		if err := s.Client.BulkPatchSpaces(where, patch); err != nil {
@@ -173,9 +171,7 @@ func (s *Seeder) deployments() error {
 			"Stage":       c.Class,
 			"Environment": c.Class,
 		}
-		if !c.Shared() {
-			labels["Department"] = c.Department
-		}
+		labels["Department"] = departmentLabel(c.Department)
 		patch, _ := json.Marshal(map[string]any{"Labels": labels})
 		where := fmt.Sprintf("%s AND Space.Labels.Cluster = '%s' AND Space.Labels.Role = 'deployment'", demoWhere(s.Model), c.Name)
 		if err := s.Client.BulkPatchUnits(where, patch); err != nil {

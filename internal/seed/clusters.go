@@ -24,9 +24,7 @@ func clusterLabels(s *Seeder, c *scenario.Cluster) map[string]string {
 		"Environment":           c.Class,
 		"Stage":                 c.Class,
 	})
-	if !c.Shared() {
-		labels["Department"] = c.Department
-	}
+	labels["Department"] = departmentLabel(c.Department)
 	return labels
 }
 
@@ -88,9 +86,7 @@ func (s *Seeder) cluster(c *scenario.Cluster) (bool, bool, error) {
 		"Cloud.Provider":            s.Model.Scenario.Cloud,
 		"Cloud.Region":              c.ProviderRegion,
 	}
-	if !c.Shared() {
-		facts["Cluster.Department"] = c.Department
-	}
+	facts["Cluster.Department"] = departmentLabel(c.Department)
 	_, err = s.Client.CreateTarget(sp.SpaceID, goclient.Target{
 		SpaceID:      sp.SpaceID,
 		Slug:         TargetSlug,
