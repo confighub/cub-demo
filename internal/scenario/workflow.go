@@ -100,8 +100,12 @@ func (m *Model) WorkflowDefs() []WorkflowDef {
 }
 
 // WorkflowStages generates a def's bases-first stage list: one stage holding
-// the covered class bases (they are siblings of the root, so the unordered
-// wave is safe), then one stage per class's deployments in class order.
+// the root base and the covered class bases, then one stage per class's
+// deployments in class order. The root is in the stage so that a change
+// authored elsewhere (an Invoke change order from the platform team) lands
+// in it too; a change order authored in the root is skipped there by the
+// server ("the space the change order was created in"), and the class bases,
+// its siblings, take from it in the same unordered wave.
 // Class bases are never deployed, so only the deployment stages carry
 // released/healthy gates; the first deployment stage needs none because the
 // stage before it holds only bases.
@@ -116,7 +120,7 @@ func (m *Model) WorkflowStages(def WorkflowDef) []WorkflowStage {
 	// definitions that name it themselves.
 	stages := []WorkflowStage{{
 		Name: "bases",
-		WhereSpace: fmt.Sprintf("Labels.DemoName = '%s' AND Labels.Role = 'base' AND Labels.Variant IN (%s)",
+		WhereSpace: fmt.Sprintf("Labels.DemoName = '%s' AND Labels.Role = 'base' AND Labels.Variant IN ('base', %s)",
 			demoName, strings.Join(classes, ", ")),
 	}}
 	for i, cl := range def.Classes {

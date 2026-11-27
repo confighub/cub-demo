@@ -122,7 +122,10 @@ one shared entity per distinct rollout shape, in the home space: components plac
 class share `standard-rollout`, and a component placed on fewer classes gets a workflow
 whose stages are exactly its classes (e.g. `rollout-uat-prod`) — the server refuses to
 promote past a stage that selects no space, so shapes cannot be mixed. All are bases-first:
-a `bases` stage holding the covered class bases, then one stage per class's deployments.
+a `bases` stage holding the root base and the covered class bases, then one stage per
+class's deployments. A change order authored in the root base skips it in that stage (the
+server reports "the space the change order was created in"); one authored elsewhere, such as
+an Invoke change order from the platform team, lands in the root too.
 `prerequisites` sets the gates per deployment stage (keys are class names plus `final`;
 values from `released`, `healthy`); absent keys default to `[released, healthy]`. The first
 class must stay gate-free — its previous stage holds only bases, which release nothing and
